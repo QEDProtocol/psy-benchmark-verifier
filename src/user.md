@@ -19,11 +19,11 @@ This guide explains how to deploy and use `psy_validator_cli` to generate and ve
 
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd parth-generic-v1
+git clone https://github.com/QEDProtocol/psy-benchmark-verifier.git
+cd psy-benchmark-verifier
 
 # Build the validator binary
-cargo build --release -p psy_validator --bin psy_validator_cli
+cargo build --release
 
 # Binary will be at: target/release/psy_validator_cli
 ```

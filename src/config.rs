@@ -39,9 +39,7 @@ pub async fn run(config: Config) -> Result<()> {
     tracing::info!("Initializing validator service...");
 
     // Get counter file path from environment or use default
-    let counter_file = std::env::var("ACTIVITY_COUNTER_FILE")
-        .ok()
-        .map(std::path::PathBuf::from);
+    let counter_file = std::env::var("ACTIVITY_COUNTER_FILE").ok().map(std::path::PathBuf::from);
 
     let state = Arc::new(AppState::new(counter_file)?);
 

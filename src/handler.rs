@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use axum::{
     extract::State,
@@ -7,11 +7,8 @@ use axum::{
     routing::{get, post},
     Router,
 };
-
-use std::path::PathBuf;
-
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use parth_core::{pgoldilocks::QHashOut, protocol::core_types::Q256BitHash};
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::{
     models::{GenerateProofRequest, GenerateProofResponse, VerifyProofRequest, VerifyProofResponse},
@@ -48,9 +45,11 @@ pub async fn handle_generate_proof(
             .map_err(|e| ApiError::InternalError(format!("Failed to derive worker_reward_tag: {}", e)))?,
     };
 
-    let reward_tree_value = request.reward_tree_value.as_deref().map(|hex| {
-        parse_hex_hash(hex).map_err(|e| ApiError::BadRequest(format!("Invalid reward_tree_value: {}", e)))
-    }).transpose()?;
+    let reward_tree_value = request
+        .reward_tree_value
+        .as_deref()
+        .map(|hex| parse_hex_hash(hex).map_err(|e| ApiError::BadRequest(format!("Invalid reward_tree_value: {}", e))))
+        .transpose()?;
 
     let (proof_bytes, computed_reward_tree_value) = state
         .generate_proof(input, Some(worker_reward_tag), reward_tree_value)
@@ -81,13 +80,17 @@ pub async fn handle_verify_proof(
 
     let proof_bytes = hex::decode(&request.proof).map_err(|e| ApiError::BadRequest(format!("Invalid proof hex: {}", e)))?;
 
-    let worker_reward_tag = request.worker_reward_tag.as_deref().map(|tag_hex| {
-        parse_hex_hash(tag_hex).map_err(|e| ApiError::BadRequest(format!("Invalid worker_reward_tag: {}", e)))
-    }).transpose()?;
+    let worker_reward_tag = request
+        .worker_reward_tag
+        .as_deref()
+        .map(|tag_hex| parse_hex_hash(tag_hex).map_err(|e| ApiError::BadRequest(format!("Invalid worker_reward_tag: {}", e))))
+        .transpose()?;
 
-    let reward_tree_value = request.reward_tree_value.as_deref().map(|hex| {
-        parse_hex_hash(hex).map_err(|e| ApiError::BadRequest(format!("Invalid reward_tree_value: {}", e)))
-    }).transpose()?;
+    let reward_tree_value = request
+        .reward_tree_value
+        .as_deref()
+        .map(|hex| parse_hex_hash(hex).map_err(|e| ApiError::BadRequest(format!("Invalid reward_tree_value: {}", e))))
+        .transpose()?;
     handle_increment_activity(State(state.clone())).await?;
 
     match state.verify_proof(input, &proof_bytes, worker_reward_tag, reward_tree_value) {
@@ -110,9 +113,7 @@ pub async fn handle_verify_proof(
 
 /// Handler for POST /v1/activity/increment
 /// Increment activity counter and return new value
-pub async fn handle_increment_activity(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<ActivityCountResponse>, ApiError> {
+pub async fn handle_increment_activity(State(state): State<Arc<AppState>>) -> Result<Json<ActivityCountResponse>, ApiError> {
     tracing::info!("Received increment_activity request");
 
     let count = state
@@ -125,9 +126,7 @@ pub async fn handle_increment_activity(
 
 /// Handler for GET /v1/activity/count
 /// Get current activity counter value
-pub async fn handle_get_activity_count(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<ActivityCountResponse>, ApiError> {
+pub async fn handle_get_activity_count(State(state): State<Arc<AppState>>) -> Result<Json<ActivityCountResponse>, ApiError> {
     let count = state.activity_counter.get();
 
     Ok(Json(ActivityCountResponse { count }))
@@ -179,8 +178,7 @@ mod tests {
         body::{to_bytes, Body},
         http::Request,
     };
-    use serde::de::DeserializeOwned;
-    use serde::{Deserialize, Serialize};
+    use serde::{de::DeserializeOwned, Deserialize, Serialize};
     use tower::ServiceExt;
 
     use super::*;
@@ -207,10 +205,10 @@ mod tests {
     }
 
     fn load_proof_fixture() -> String {
-        // Try to load as new format first, fallback to old format for backward compatibility
-        let content = fs::read_to_string(&fixture_path("src/proof.json"))
-            .unwrap_or_else(|e| panic!("Failed to read proof.json fixture: {}", e));
-        
+        // Try to load as new format first, fallback to old format for backward
+        // compatibility
+        let content = fs::read_to_string(&fixture_path("src/proof.json")).unwrap_or_else(|e| panic!("Failed to read proof.json fixture: {}", e));
+
         // Try to parse as new format
         if let Ok(proof_json) = serde_json::from_str::<ProofJson>(&content) {
             proof_json.proof
@@ -219,8 +217,7 @@ mod tests {
             // Remove quotes if it's a JSON string
             let trimmed = content.trim();
             if trimmed.starts_with('"') && trimmed.ends_with('"') {
-                serde_json::from_str::<String>(trimmed)
-                    .unwrap_or_else(|_| trimmed.trim_matches('"').to_string())
+                serde_json::from_str::<String>(trimmed).unwrap_or_else(|_| trimmed.trim_matches('"').to_string())
             } else {
                 trimmed.to_string()
             }
@@ -228,17 +225,15 @@ mod tests {
     }
 
     fn load_proof_fixture_with_reward_tree_value() -> (String, String) {
-        let content = fs::read_to_string(&fixture_path("src/proof.json"))
-            .unwrap_or_else(|e| panic!("Failed to read proof.json fixture: {}", e));
-        
+        let content = fs::read_to_string(&fixture_path("src/proof.json")).unwrap_or_else(|e| panic!("Failed to read proof.json fixture: {}", e));
+
         // Try to parse as new format
         if let Ok(proof_json) = serde_json::from_str::<ProofJson>(&content) {
             (proof_json.proof, proof_json.reward_tree_value)
         } else {
             // Fallback: old format doesn't have reward_tree_value
             let proof = if content.trim().starts_with('"') {
-                serde_json::from_str::<String>(content.trim())
-                    .unwrap_or_else(|_| content.trim().trim_matches('"').to_string())
+                serde_json::from_str::<String>(content.trim()).unwrap_or_else(|_| content.trim().trim_matches('"').to_string())
             } else {
                 content.trim().to_string()
             };

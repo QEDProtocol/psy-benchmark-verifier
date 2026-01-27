@@ -1,6 +1,5 @@
-use psy_validator::config::{Config, run};
-
 use clap::Parser;
+use psy_validator::config::{run, Config};
 use tracing_subscriber::{self, EnvFilter};
 
 /// Psy Validator Service - Zero Knowledge Proof Generation and Verification API

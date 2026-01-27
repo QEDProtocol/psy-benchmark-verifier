@@ -40,10 +40,9 @@ impl ActivityCounterManager {
     /// Load counter from file, create default if file doesn't exist
     fn load_from_file(file_path: &PathBuf) -> Result<ActivityCounter> {
         if file_path.exists() {
-            let content = fs::read_to_string(file_path)
-                .with_context(|| format!("Failed to read counter file: {}", file_path.display()))?;
-            let counter: ActivityCounter = serde_json::from_str(&content)
-                .with_context(|| format!("Failed to parse counter file: {}", file_path.display()))?;
+            let content = fs::read_to_string(file_path).with_context(|| format!("Failed to read counter file: {}", file_path.display()))?;
+            let counter: ActivityCounter =
+                serde_json::from_str(&content).with_context(|| format!("Failed to parse counter file: {}", file_path.display()))?;
             tracing::info!("Loaded activity counter: {} from {}", counter.count, file_path.display());
             Ok(counter)
         } else {
@@ -51,14 +50,11 @@ impl ActivityCounterManager {
             let counter = ActivityCounter::default();
             // Create parent directory if it doesn't exist
             if let Some(parent) = file_path.parent() {
-                fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+                fs::create_dir_all(parent).with_context(|| format!("Failed to create directory: {}", parent.display()))?;
             }
             // Save initial counter
-            let content = serde_json::to_string_pretty(&counter)
-                .context("Failed to serialize counter")?;
-            fs::write(file_path, content)
-                .with_context(|| format!("Failed to write counter file: {}", file_path.display()))?;
+            let content = serde_json::to_string_pretty(&counter).context("Failed to serialize counter")?;
+            fs::write(file_path, content).with_context(|| format!("Failed to write counter file: {}", file_path.display()))?;
             Ok(counter)
         }
     }
@@ -66,8 +62,7 @@ impl ActivityCounterManager {
     /// Save counter to file
     fn save_to_file(&self, counter: &ActivityCounter) -> Result<()> {
         let content = serde_json::to_string_pretty(counter).context("Failed to serialize counter")?;
-        fs::write(&self.file_path, content)
-            .with_context(|| format!("Failed to write counter file: {}", self.file_path.display()))?;
+        fs::write(&self.file_path, content).with_context(|| format!("Failed to write counter file: {}", self.file_path.display()))?;
         Ok(())
     }
 
@@ -90,9 +85,11 @@ impl ActivityCounterManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
+
     use tempfile::TempDir;
+
+    use super::*;
 
     #[test]
     fn test_counter_increment() {

@@ -1,7 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
-use crate::counter::ActivityCounterManager;
 use parth_core::{
     crypto::hash::traits::{FromU64x4, MerkleHasher},
     data::serializable::QPDSerializable,
@@ -23,11 +22,14 @@ use psy_plonky2_circuits::{
 };
 use psy_worker_core::worker::prover_trait::PsyWorkerGenericLibraryProver;
 
+use crate::counter::ActivityCounterManager;
+
 type C = plonky2::plonk::config::PoseidonGoldilocksConfig;
 type F = GoldilocksField;
 const D: usize = 2;
 
-/// Application state holding circuit library, prover, verifier, and activity counter
+/// Application state holding circuit library, prover, verifier, and activity
+/// counter
 #[derive(Clone)]
 pub struct AppState {
     pub circuit_library: Arc<SimpleCircuitLibrary<F>>,
@@ -50,10 +52,7 @@ impl AppState {
         let counter_path = counter_file_path
             .map(|p| p.into())
             .unwrap_or_else(|| PathBuf::from("./activity_counter.json"));
-        let activity_counter = Arc::new(
-            ActivityCounterManager::new(counter_path)
-                .context("Failed to initialize activity counter")?,
-        );
+        let activity_counter = Arc::new(ActivityCounterManager::new(counter_path).context("Failed to initialize activity counter")?);
 
         Ok(Self {
             circuit_library: Arc::new(gcv.library),
@@ -137,7 +136,8 @@ impl AppState {
             node_type
         );
 
-        // Use reward_tree_value directly if provided, otherwise compute from worker_reward_tag
+        // Use reward_tree_value directly if provided, otherwise compute from
+        // worker_reward_tag
         let reward_tree_value = if let Some(rtv) = reward_tree_value {
             tracing::debug!("Using provided reward_tree_value directly");
             rtv

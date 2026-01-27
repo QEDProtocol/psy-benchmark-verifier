@@ -17,8 +17,10 @@ Psy Validator provides a REST API service for generating and verifying zero-know
 
 - `POST /v1/generate_proof` - Generate zero-knowledge proof
 - `POST /v1/verify_proof` - Verify zero-knowledge proof
-- `POST /v1/activity/increment` - Increment activity counter
-- `GET /v1/activity/count` - Get activity counter value
+
+See [API Documentation](src/api.md) for more details.
+
+See [User Guide](src/user.md) for more details.
 
 ## Dependencies
 
@@ -43,11 +45,18 @@ cargo build --release
 
 ```bash
 cargo run --release -- --listen-addr 0.0.0.0 --port 4000
+
+```
+
+or run the binary directly:
+
+```bash
+./target/release/psy_validator_cli --listen-addr 0.0.0.0 --port 4000
+
 ```
 
 ### Environment Variables
 
-- `ACTIVITY_COUNTER_FILE`: Path to the activity counter JSON file (default: `./activity_counter.json`)
 - `LOG_LEVEL`: Logging level (default: `info`)
 
 ### Command Line Options
@@ -61,7 +70,7 @@ cargo run --release -- --listen-addr 0.0.0.0 --port 4000
 Run the test suite:
 
 ```bash
-cargo test
+cargo test --release
 ```
 
 ## License
