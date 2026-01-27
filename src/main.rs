@@ -1,18 +1,21 @@
-use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::{
+    path::{Path, PathBuf},
+    time::Instant,
+};
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use futures::future::join_all;
-use parth_core::{
-    pgoldilocks::QHashOut,
-    protocol::core_types::Q256BitHash,
-};
-use psy_validator::config::{run, Config};
+use parth_core::{pgoldilocks::QHashOut, protocol::core_types::Q256BitHash};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use psy_validator::{
-    models::{GenerateProofRequest, GenerateProofResponse, VerifyProofRequest, VerifyProofResponse, PsyProvingJobMetadataJson, PsyWorkerGetProvingWorkAPIResponseJson, PsyWorkerGetProvingWorkWithChildProofsAPIResponseJson, PsyProvingJobMetadataWithJobIdJson},
-    services::{derive_worker_reward_tag_from_job_id, AppState},
+    config::{run, Config},
     handler::parse_hex_hash,
+    models::{
+        GenerateProofRequest, GenerateProofResponse, PsyProvingJobMetadataJson, PsyProvingJobMetadataWithJobIdJson,
+        PsyWorkerGetProvingWorkAPIResponseJson, PsyWorkerGetProvingWorkWithChildProofsAPIResponseJson, VerifyProofRequest, VerifyProofResponse,
+    },
+    services::{derive_worker_reward_tag_from_job_id, AppState},
 };
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -90,7 +93,8 @@ enum Commands {
         /// Base URL (format: https://xxx)
         #[arg(short, long)]
         base_url: String,
-        /// Proof ID (format: job_id_hex + realm_id_hex, where job_id_hex is 48 chars and realm_id < 1000)
+        /// Proof ID (format: job_id_hex + realm_id_hex, where job_id_hex is 48
+        /// chars and realm_id < 1000)
         #[arg(short, long)]
         proof_id: String,
         /// Output directory
@@ -106,15 +110,10 @@ enum Commands {
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::new(&cli.log_level))
-        .init();
+    tracing_subscriber::fmt().with_env_filter(EnvFilter::new(&cli.log_level)).init();
 
     match cli.command {
-        Commands::Server {
-            listen_addr,
-            port,
-        } => {
+        Commands::Server { listen_addr, port } => {
             let mut config = Config::from_env();
             config.server.host = listen_addr.clone();
             config.server.port = port;
@@ -156,12 +155,7 @@ async fn fetch_dependency_proof(
     output_dir: &Path,
 ) -> Result<Option<String>> {
     // Format: {base_url}/output/{realm_id}/{dep_job_id}/raw_proof.json
-    let raw_proof_url = format!(
-        "{}/output/{}/{}/raw_proof.json",
-        base_url,
-        realm_id,
-        dep_job_id
-    );
+    let raw_proof_url = format!("{}/output/{}/{}/raw_proof.json", base_url, realm_id, dep_job_id);
     tracing::info!("Fetching raw_proof.json for dependency {} from: {}", dep_job_id, raw_proof_url);
 
     let mut proof_response = client
@@ -183,28 +177,20 @@ async fn fetch_dependency_proof(
         // Retry with dep_realm_id for node_type == 2
         if node_type == 2 {
             let dep_realm_id = job.task_index;
-            let retry_url = format!(
-                "{}/output/{}/{}/raw_proof.json",
-                base_url,
-                dep_realm_id,
-                dep_job_id
-            );
+            let retry_url = format!("{}/output/{}/{}/raw_proof.json", base_url, dep_realm_id, dep_job_id);
             tracing::info!(
                 "Retrying fetch for dependency {} with realm_id {} (node_type=2) from: {}",
                 dep_job_id,
                 dep_realm_id,
                 retry_url
             );
-    
-            proof_response = client
-                .get(&retry_url)
-                .send()
-                .await
-                .with_context(|| format!(
+
+            proof_response = client.get(&retry_url).send().await.with_context(|| {
+                format!(
                     "Failed to send HTTP request for raw_proof.json of dependency {} (retry with realm_id {})",
-                    dep_job_id,
-                    dep_realm_id
-                ))?;
+                    dep_job_id, dep_realm_id
+                )
+            })?;
 
             if !proof_response.status().is_success() {
                 let retry_status = proof_response.status();
@@ -239,11 +225,11 @@ async fn fetch_dependency_proof(
             dep_job_id,
             raw_proof.proof.len()
         );
-        
+
         // Save raw_proof.json for this dependency (optional, for debugging)
         let dep_proof_path = output_dir.join(format!("raw_proof_{}.json", dep_job_id));
-        let raw_proof_json = serde_json::to_string_pretty(&raw_proof)
-            .with_context(|| format!("Failed to serialize raw_proof.json for dependency {}", dep_job_id))?;
+        let raw_proof_json =
+            serde_json::to_string_pretty(&raw_proof).with_context(|| format!("Failed to serialize raw_proof.json for dependency {}", dep_job_id))?;
         std::fs::write(&dep_proof_path, &raw_proof_json)
             .with_context(|| format!("Failed to write {} for dependency {}", dep_proof_path.display(), dep_job_id))?;
         tracing::debug!("Saved raw_proof.json for dependency {} to {}", dep_job_id, dep_proof_path.display());
@@ -256,11 +242,10 @@ async fn fetch_dependency_proof(
             dep_job_id,
             proof_text_trimmed.len()
         );
-        
+
         let hex_string = if proof_text_trimmed.starts_with('"') && proof_text_trimmed.ends_with('"') {
             // Remove JSON string quotes
-            serde_json::from_str::<String>(proof_text_trimmed)
-                .unwrap_or_else(|_| proof_text_trimmed.trim_matches('"').to_string())
+            serde_json::from_str::<String>(proof_text_trimmed).unwrap_or_else(|_| proof_text_trimmed.trim_matches('"').to_string())
         } else {
             proof_text_trimmed.to_string()
         };
@@ -269,7 +254,12 @@ async fn fetch_dependency_proof(
         let dep_proof_path = output_dir.join(format!("raw_proof_{}.json", dep_job_id));
         std::fs::write(&dep_proof_path, &hex_string)
             .with_context(|| format!("Failed to write {} for dependency {}", dep_proof_path.display(), dep_job_id))?;
-        tracing::debug!("Saved raw_proof.json for dependency {} to {} (plain hex format, length: {} chars)", dep_job_id, dep_proof_path.display(), hex_string.len());
+        tracing::debug!(
+            "Saved raw_proof.json for dependency {} to {} (plain hex format, length: {} chars)",
+            dep_job_id,
+            dep_proof_path.display(),
+            hex_string.len()
+        );
 
         hex_string
     };
@@ -277,26 +267,20 @@ async fn fetch_dependency_proof(
     Ok(Some(proof_hex))
 }
 
-async fn fetch_job(
-    base_url: String,
-    proof_id: String,
-    output_dir: Option<PathBuf>,
-    one_click_done: bool,
-) -> Result<()> {
+async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBuf>, one_click_done: bool) -> Result<()> {
     let start_time = Instant::now();
     tracing::info!("Fetching job with base_url: {}, proof_id: {}", base_url, proof_id);
     tracing::info!("One-click done: {}", one_click_done);
 
     // Parse proof_id to extract job_id_hex and realm_id
     // proof_id format: job_id_hex (48 chars) + realm_id_hex
-    let (job_id, mut realm_id) = parse_proof_id(&proof_id)
-        .context("Failed to parse proof_id")?;
-    
+    let (job_id, mut realm_id) = parse_proof_id(&proof_id).context("Failed to parse proof_id")?;
+
     // Calculate node_type based on realm_id
-    let node_type = if realm_id < 999 { 
-        realm_id+=1;
-        1 
-    } else { 
+    let node_type = if realm_id < 999 {
+        realm_id += 1;
+        1
+    } else {
         2
     };
     tracing::info!("Realm ID (parsed from proof_id): {}", realm_id);
@@ -307,8 +291,7 @@ async fn fetch_job(
     // Determine output directory and create realm_id subdirectory
     let base_output_dir = output_dir.unwrap_or_else(|| PathBuf::from("."));
     let output_dir = base_output_dir.join(realm_id.to_string());
-    std::fs::create_dir_all(&output_dir)
-        .with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
+    std::fs::create_dir_all(&output_dir).with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
     tracing::info!("Output directory: {}", output_dir.display());
 
     let job = parse_job_id(&hex::decode(&job_id).context("Failed to decode job ID")?);
@@ -324,12 +307,7 @@ async fn fetch_job(
 
     // Construct raw_input_url from base_url, realm_id, and job_id
     // Format: {base_url}/output/{realm_id}/{job_id}/raw_input.json
-    let raw_input_url = format!(
-        "{}/output/{}/{}/raw_input.json",
-        base_url,
-        realm_id,
-        job_id
-    );
+    let raw_input_url = format!("{}/output/{}/{}/raw_input.json", base_url, realm_id, job_id);
     tracing::info!("Fetching raw_input.json from: {}", raw_input_url);
 
     // Fetch raw_input.json
@@ -348,42 +326,29 @@ async fn fetch_job(
         );
     }
 
-    let raw_input: RawInputJson = response
-        .json()
-        .await
-        .context("Failed to parse raw_input.json response")?;
+    let raw_input: RawInputJson = response.json().await.context("Failed to parse raw_input.json response")?;
 
     // Save raw_input.json with job_id in filename
     let raw_input_path = output_dir.join(format!("raw_input_{}.json", job_id));
-    let raw_input_json = serde_json::to_string_pretty(&raw_input)
-        .context("Failed to serialize raw_input.json")?;
-    std::fs::write(&raw_input_path, &raw_input_json)
-        .with_context(|| format!("Failed to write raw_input.json: {}", raw_input_path.display()))?;
+    let raw_input_json = serde_json::to_string_pretty(&raw_input).context("Failed to serialize raw_input.json")?;
+    std::fs::write(&raw_input_path, &raw_input_json).with_context(|| format!("Failed to write raw_input.json: {}", raw_input_path.display()))?;
     tracing::info!("Saved raw_input.json to: {}", raw_input_path.display());
 
     // Fetch raw_proof.json for each dependency in parallel
     tracing::info!("Fetching {} dependencies in parallel", raw_input.metadata.dependencies.len());
-    let fetch_tasks: Vec<_> = raw_input.metadata.dependencies
+    let fetch_tasks: Vec<_> = raw_input
+        .metadata
+        .dependencies
         .iter()
-        .map(|dep_job_id| {
-            fetch_dependency_proof(
-                &client,
-                &base_url,
-                realm_id,
-                node_type,
-                &job,
-                dep_job_id,
-                &output_dir,
-            )
-        })
+        .map(|dep_job_id| fetch_dependency_proof(&client, &base_url, realm_id, node_type, &job, dep_job_id, &output_dir))
         .collect();
 
     let results = join_all(fetch_tasks).await;
-    
+
     // Process results and collect proofs or missing dependencies
     let mut input_proofs = Vec::new();
     let mut missing_dependencies = Vec::new();
-    
+
     for (dep_job_id, result) in raw_input.metadata.dependencies.iter().zip(results) {
         match result {
             Ok(Some(proof_hex)) => {
@@ -400,11 +365,7 @@ async fn fetch_job(
             }
             Err(e) => {
                 missing_dependencies.push(dep_job_id.clone());
-                tracing::error!(
-                    "Error fetching proof for dependency {}: {:#}",
-                    dep_job_id,
-                    e
-                );
+                tracing::error!("Error fetching proof for dependency {}: {:#}", dep_job_id, e);
             }
         }
     }
@@ -458,10 +419,8 @@ async fn fetch_job(
 
     // Save input.json with job_id in filename
     let input_path = output_dir.join(format!("input_{}.json", job_id));
-    let input_json_str = serde_json::to_string_pretty(&input_json)
-        .context("Failed to serialize input.json")?;
-    std::fs::write(&input_path, &input_json_str)
-        .with_context(|| format!("Failed to write input.json: {}", input_path.display()))?;
+    let input_json_str = serde_json::to_string_pretty(&input_json).context("Failed to serialize input.json")?;
+    std::fs::write(&input_path, &input_json_str).with_context(|| format!("Failed to write input.json: {}", input_path.display()))?;
     tracing::info!("Saved input.json to: {}", input_path.display());
 
     let elapsed = start_time.elapsed();
@@ -470,9 +429,9 @@ async fn fetch_job(
     // One-click workflow: generate_proof -> verify_proof
     if one_click_done {
         tracing::info!("Starting one-click workflow: generate_proof -> verify_proof");
-        
+
         let proof_path = output_dir.join(format!("proof_{}.json", job_id));
-        
+
         // Step 1: Generate proof
         tracing::info!("Step 1/2: Generating proof...");
         handle_generate_proof(
@@ -483,18 +442,16 @@ async fn fetch_job(
         )
         .context("Failed to generate proof in one-click workflow")?;
         tracing::info!("Proof generated successfully");
-        
+
         // Step 2: Verify proof
         tracing::info!("Step 2/2: Verifying proof...");
         handle_verify_proof(
-            input_path,
-            proof_path,
-            None, // worker_reward_tag (will be extracted from proof.json if needed)
+            input_path, proof_path, None, // worker_reward_tag (will be extracted from proof.json if needed)
             None, // reward_tree_value (will be extracted from proof.json)
         )
         .context("Failed to verify proof in one-click workflow")?;
         tracing::info!("Proof verified successfully");
-        
+
         tracing::info!("One-click workflow completed successfully!");
     }
 
@@ -511,11 +468,10 @@ fn handle_generate_proof(
     let now = Instant::now();
 
     // Read input file
-    let input_content = std::fs::read_to_string(&input_path)
-        .with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
+    let input_content = std::fs::read_to_string(&input_path).with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
 
-    let mut request: GenerateProofRequest = serde_json::from_str(&input_content)
-        .with_context(|| format!("Failed to parse input JSON: {}", input_path.display()))?;
+    let mut request: GenerateProofRequest =
+        serde_json::from_str(&input_content).with_context(|| format!("Failed to parse input JSON: {}", input_path.display()))?;
 
     // Override with CLI arguments if provided
     if let Some(tag) = worker_reward_tag {
@@ -530,10 +486,7 @@ fn handle_generate_proof(
     let state = AppState::new().context("Failed to initialize AppState")?;
 
     // Convert request to internal format
-    let input = request
-        .input
-        .to_internal()
-        .context("Failed to convert input to internal format")?;
+    let input = request.input.to_internal().context("Failed to convert input to internal format")?;
 
     // Get job_id for deriving worker_reward_tag if needed
     let job_id = input.base.job.job_id;
@@ -541,8 +494,7 @@ fn handle_generate_proof(
     // Parse worker_reward_tag and reward_tree_value
     let worker_reward_tag = match request.worker_reward_tag.as_deref() {
         Some(tag_hex) => {
-            let tag = parse_hex_hash(tag_hex)
-                .map_err(|e| anyhow::anyhow!("Invalid worker_reward_tag: {}", e))?;
+            let tag = parse_hex_hash(tag_hex).map_err(|e| anyhow::anyhow!("Invalid worker_reward_tag: {}", e))?;
             Some(tag)
         }
         None => None,
@@ -551,9 +503,7 @@ fn handle_generate_proof(
     let reward_tree_value = request
         .reward_tree_value
         .as_deref()
-        .map(|hex| {
-            parse_hex_hash(hex).map_err(|e| anyhow::anyhow!("Invalid reward_tree_value: {}", e))
-        })
+        .map(|hex| parse_hex_hash(hex).map_err(|e| anyhow::anyhow!("Invalid reward_tree_value: {}", e)))
         .transpose()?;
 
     // Generate proof
@@ -567,8 +517,7 @@ fn handle_generate_proof(
     let final_worker_reward_tag: QHashOut<GoldilocksField> = if let Some(tag) = worker_reward_tag {
         tag
     } else {
-        derive_worker_reward_tag_from_job_id(job_id)
-            .context("Failed to derive worker_reward_tag")?
+        derive_worker_reward_tag_from_job_id(job_id).context("Failed to derive worker_reward_tag")?
     };
 
     // Convert computed_reward_tree_value to bytes
@@ -583,12 +532,10 @@ fn handle_generate_proof(
     };
 
     // Output result
-    let output_json = serde_json::to_string_pretty(&response)
-        .context("Failed to serialize response to JSON")?;
+    let output_json = serde_json::to_string_pretty(&response).context("Failed to serialize response to JSON")?;
 
     if let Some(output) = output_path {
-        std::fs::write(&output, output_json)
-            .with_context(|| format!("Failed to write output file: {}", output.display()))?;
+        std::fs::write(&output, output_json).with_context(|| format!("Failed to write output file: {}", output.display()))?;
         tracing::info!("Proof written to: {}", output.display());
     } else {
         println!("{}", output_json);
@@ -598,20 +545,15 @@ fn handle_generate_proof(
     Ok(())
 }
 
-fn handle_verify_proof(
-    input_path: PathBuf,
-    proof_path: PathBuf,
-    worker_reward_tag: Option<String>,
-    reward_tree_value: Option<String>,
-) -> Result<()> {
+fn handle_verify_proof(input_path: PathBuf, proof_path: PathBuf, worker_reward_tag: Option<String>, reward_tree_value: Option<String>) -> Result<()> {
     tracing::info!("Reading input from: {}", input_path.display());
     tracing::info!("Reading proof from: {}", proof_path.display());
 
     // Read input file
-    let input_content = std::fs::read_to_string(&input_path)
-        .with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
+    let input_content = std::fs::read_to_string(&input_path).with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
 
-    // Try to parse as VerifyProofRequest first, then fallback to GenerateProofRequest
+    // Try to parse as VerifyProofRequest first, then fallback to
+    // GenerateProofRequest
     let mut request: VerifyProofRequest = if let Ok(verify_req) = serde_json::from_str::<VerifyProofRequest>(&input_content) {
         verify_req
     } else if let Ok(generate_req) = serde_json::from_str::<GenerateProofRequest>(&input_content) {
@@ -630,8 +572,7 @@ fn handle_verify_proof(
     };
 
     // Read proof file
-    let proof_content = std::fs::read_to_string(&proof_path)
-        .with_context(|| format!("Failed to read proof file: {}", proof_path.display()))?;
+    let proof_content = std::fs::read_to_string(&proof_path).with_context(|| format!("Failed to read proof file: {}", proof_path.display()))?;
 
     // Parse proof file - support both JSON format and plain hex string
     let (proof_hex, proof_reward_tree_value) = parse_proof_file(&proof_content)?;
@@ -655,31 +596,22 @@ fn handle_verify_proof(
     let state = AppState::new().context("Failed to initialize AppState")?;
 
     // Convert request to internal format
-    let input = request
-        .input
-        .to_internal()
-        .context("Failed to convert input to internal format")?;
+    let input = request.input.to_internal().context("Failed to convert input to internal format")?;
 
     // Parse proof bytes
-    let proof_bytes = hex::decode(&request.proof)
-        .context("Failed to decode proof hex string")?;
+    let proof_bytes = hex::decode(&request.proof).context("Failed to decode proof hex string")?;
 
     // Parse worker_reward_tag and reward_tree_value
     let worker_reward_tag = request
         .worker_reward_tag
         .as_deref()
-        .map(|tag_hex| {
-            parse_hex_hash(tag_hex)
-                .map_err(|e| anyhow::anyhow!("Invalid worker_reward_tag: {}", e))
-        })
+        .map(|tag_hex| parse_hex_hash(tag_hex).map_err(|e| anyhow::anyhow!("Invalid worker_reward_tag: {}", e)))
         .transpose()?;
 
     let reward_tree_value = request
         .reward_tree_value
         .as_deref()
-        .map(|hex| {
-            parse_hex_hash(hex).map_err(|e| anyhow::anyhow!("Invalid reward_tree_value: {}", e))
-        })
+        .map(|hex| parse_hex_hash(hex).map_err(|e| anyhow::anyhow!("Invalid reward_tree_value: {}", e)))
         .transpose()?;
 
     // Verify proof
@@ -702,8 +634,7 @@ fn handle_verify_proof(
     };
 
     // Output result
-    let output_json = serde_json::to_string_pretty(&response)
-        .context("Failed to serialize response to JSON")?;
+    let output_json = serde_json::to_string_pretty(&response).context("Failed to serialize response to JSON")?;
 
     println!("{}", output_json);
 
@@ -723,10 +654,7 @@ fn parse_proof_file(content: &str) -> Result<(String, Option<String>)> {
     if let Ok(proof_json) = serde_json::from_str::<serde_json::Value>(trimmed) {
         if let Some(obj) = proof_json.as_object() {
             if let Some(proof) = obj.get("proof").and_then(|v| v.as_str()) {
-                let reward_tree_value = obj
-                    .get("reward_tree_value")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+                let reward_tree_value = obj.get("reward_tree_value").and_then(|v| v.as_str()).map(|s| s.to_string());
                 return Ok((proof.to_string(), reward_tree_value));
             }
         }
@@ -734,8 +662,7 @@ fn parse_proof_file(content: &str) -> Result<(String, Option<String>)> {
 
     // Fallback: treat as plain hex string (may be quoted JSON string)
     let proof_hex = if trimmed.starts_with('"') && trimmed.ends_with('"') {
-        serde_json::from_str::<String>(trimmed)
-            .unwrap_or_else(|_| trimmed.trim_matches('"').to_string())
+        serde_json::from_str::<String>(trimmed).unwrap_or_else(|_| trimmed.trim_matches('"').to_string())
     } else {
         trimmed.to_string()
     };
@@ -743,13 +670,12 @@ fn parse_proof_file(content: &str) -> Result<(String, Option<String>)> {
     Ok((proof_hex, None))
 }
 
-
 /// Parse proof_id into job_id_hex and realm_id
-/// proof_id format: job_id_hex (48 chars) + realm_id_hex (variable length, realm_id < 1000)
-/// Returns (job_id_hex, realm_id)
+/// proof_id format: job_id_hex (48 chars) + realm_id_hex (variable length,
+/// realm_id < 1000) Returns (job_id_hex, realm_id)
 fn parse_proof_id(proof_id: &str) -> Result<(String, u64)> {
     const JOB_ID_HEX_LEN: usize = 48; // 24 bytes = 48 hex chars
-    
+
     if proof_id.len() < JOB_ID_HEX_LEN {
         anyhow::bail!(
             "proof_id too short: expected at least {} characters, got {}",
@@ -760,25 +686,20 @@ fn parse_proof_id(proof_id: &str) -> Result<(String, u64)> {
 
     // Extract job_id_hex from the beginning (48 chars)
     let job_id_hex = proof_id[..JOB_ID_HEX_LEN].to_string();
-    
+
     // Extract realm_id_hex from the remaining part
     let realm_id_hex = &proof_id[JOB_ID_HEX_LEN..];
-    
+
     if realm_id_hex.is_empty() {
         anyhow::bail!("realm_id_hex is empty in proof_id");
     }
 
     // Parse realm_id_hex to u64
-    let realm_id = u64::from_str_radix(realm_id_hex, 16)
-        .with_context(|| format!("Failed to parse realm_id_hex '{}' as u64", realm_id_hex))?;
+    let realm_id = u64::from_str_radix(realm_id_hex, 16).with_context(|| format!("Failed to parse realm_id_hex '{}' as u64", realm_id_hex))?;
 
     // Validate realm_id < 1000
     if realm_id >= 1000 {
-        anyhow::bail!(
-            "realm_id must be < 1000, got {} (from hex: {})",
-            realm_id,
-            realm_id_hex
-        );
+        anyhow::bail!("realm_id must be < 1000, got {} (from hex: {})", realm_id, realm_id_hex);
     }
 
     Ok((job_id_hex, realm_id))
@@ -810,7 +731,6 @@ fn parse_job_id(bytes: &[u8]) -> Option<ParsedJobId> {
         data_index,
     })
 }
-
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ParsedJobId {
