@@ -38,10 +38,7 @@ impl Config {
 pub async fn run(config: Config) -> Result<()> {
     tracing::info!("Initializing validator service...");
 
-    // Get counter file path from environment or use default
-    let counter_file = std::env::var("ACTIVITY_COUNTER_FILE").ok().map(std::path::PathBuf::from);
-
-    let state = Arc::new(AppState::new(counter_file)?);
+    let state = Arc::new(AppState::new()?);
 
     tracing::info!("Circuit library and verifier initialized successfully");
 
@@ -54,8 +51,6 @@ pub async fn run(config: Config) -> Result<()> {
     tracing::info!("Endpoints:");
     tracing::info!("  POST /v1/generate_proof    - Generate zero-knowledge proof");
     tracing::info!("  POST /v1/verify_proof      - Verify zero-knowledge proof");
-    tracing::info!("  POST /v1/activity/increment - Increment activity counter");
-    tracing::info!("  GET  /v1/activity/count     - Get activity counter value");
 
     axum::serve(listener, app).await?;
 

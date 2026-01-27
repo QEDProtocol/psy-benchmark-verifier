@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use parth_core::{
@@ -22,25 +22,21 @@ use psy_plonky2_circuits::{
 };
 use psy_worker_core::worker::prover_trait::PsyWorkerGenericLibraryProver;
 
-use crate::counter::ActivityCounterManager;
-
 type C = plonky2::plonk::config::PoseidonGoldilocksConfig;
 type F = GoldilocksField;
 const D: usize = 2;
 
-/// Application state holding circuit library, prover, verifier, and activity
-/// counter
+/// Application state holding circuit library, prover, and verifier
 #[derive(Clone)]
 pub struct AppState {
     pub circuit_library: Arc<SimpleCircuitLibrary<F>>,
     pub prover: Arc<QEDCoordinatorCircuitManager<C, D>>,
     pub verifier: Arc<PsyPlonky2ZKVerifier<C, D>>,
-    pub activity_counter: Arc<ActivityCounterManager>,
 }
 
 impl AppState {
     /// Initialize application state with plonky2 circuits for LocalDevnet
-    pub fn new(counter_file_path: Option<impl Into<PathBuf>>) -> Result<Self> {
+    pub fn new() -> Result<Self> {
         let network = PsyChainNetworkType::LocalDevnet;
 
         let (gcv, coordinator_circuits) =
@@ -48,17 +44,10 @@ impl AppState {
 
         let verifier = PsyPlonky2ZKVerifier::<C, D>::from_cached();
 
-        // Initialize activity counter
-        let counter_path = counter_file_path
-            .map(|p| p.into())
-            .unwrap_or_else(|| PathBuf::from("./activity_counter.json"));
-        let activity_counter = Arc::new(ActivityCounterManager::new(counter_path).context("Failed to initialize activity counter")?);
-
         Ok(Self {
             circuit_library: Arc::new(gcv.library),
             prover: Arc::new(coordinator_circuits),
             verifier: Arc::new(verifier),
-            activity_counter,
         })
     }
 

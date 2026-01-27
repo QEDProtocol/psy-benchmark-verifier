@@ -1,10 +1,10 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{get, post},
+    routing::post,
     Router,
 };
 use parth_core::{pgoldilocks::QHashOut, protocol::core_types::Q256BitHash};
@@ -22,8 +22,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .layer(TraceLayer::new_for_http())
         .route("/v1/generate_proof", post(handle_generate_proof))
         .route("/v1/verify_proof", post(handle_verify_proof))
-        .route("/v1/activity/increment", post(handle_increment_activity))
-        .route("/v1/activity/count", get(handle_get_activity_count))
         .with_state(state)
 }
 
@@ -91,7 +89,6 @@ pub async fn handle_verify_proof(
         .as_deref()
         .map(|hex| parse_hex_hash(hex).map_err(|e| ApiError::BadRequest(format!("Invalid reward_tree_value: {}", e))))
         .transpose()?;
-    handle_increment_activity(State(state.clone())).await?;
 
     match state.verify_proof(input, &proof_bytes, worker_reward_tag, reward_tree_value) {
         Ok(()) => {
@@ -109,33 +106,6 @@ pub async fn handle_verify_proof(
             }))
         }
     }
-}
-
-/// Handler for POST /v1/activity/increment
-/// Increment activity counter and return new value
-pub async fn handle_increment_activity(State(state): State<Arc<AppState>>) -> Result<Json<ActivityCountResponse>, ApiError> {
-    tracing::info!("Received increment_activity request");
-
-    let count = state
-        .activity_counter
-        .increment()
-        .map_err(|e| ApiError::InternalError(format!("Failed to increment counter: {}", e)))?;
-
-    Ok(Json(ActivityCountResponse { count }))
-}
-
-/// Handler for GET /v1/activity/count
-/// Get current activity counter value
-pub async fn handle_get_activity_count(State(state): State<Arc<AppState>>) -> Result<Json<ActivityCountResponse>, ApiError> {
-    let count = state.activity_counter.get();
-
-    Ok(Json(ActivityCountResponse { count }))
-}
-
-/// Activity count response
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ActivityCountResponse {
-    pub count: u64,
 }
 
 pub fn parse_hex_hash(hex_str: &str) -> Result<QHashOut<plonky2::field::goldilocks_field::GoldilocksField>, String> {
@@ -265,7 +235,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_proof_then_verify_handler() {
-        let state = Arc::new(AppState::new(None::<PathBuf>).expect("Failed to init AppState"));
+        let state = Arc::new(AppState::new().expect("Failed to init AppState"));
         let input = load_input_fixture();
 
         let generate_request = GenerateProofRequest {
@@ -295,7 +265,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_proof_fixture_handler() {
-        let state = Arc::new(AppState::new(None::<PathBuf>).expect("Failed to init AppState"));
+        let state = Arc::new(AppState::new().expect("Failed to init AppState"));
         let input = load_input_fixture();
         let (proof, reward_tree_value) = load_proof_fixture_with_reward_tree_value();
 
@@ -315,7 +285,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_proof_then_verify_router() {
-        let state = Arc::new(AppState::new(None::<PathBuf>).expect("Failed to init AppState"));
+        let state = Arc::new(AppState::new().expect("Failed to init AppState"));
         let app = create_router(state);
 
         let input = load_input_fixture();
@@ -328,7 +298,7 @@ mod tests {
 
         let generate_response: GenerateProofResponse = post_json(app, "/v1/generate_proof", generate_payload).await;
 
-        let state = Arc::new(AppState::new(None::<PathBuf>).expect("Failed to init AppState"));
+        let state = Arc::new(AppState::new().expect("Failed to init AppState"));
         let app = create_router(state);
         let verify_payload = serde_json::to_value(VerifyProofRequest {
             input,
@@ -345,7 +315,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_proof_fixture_router() {
-        let state = Arc::new(AppState::new(None::<PathBuf>).expect("Failed to init AppState"));
+        let state = Arc::new(AppState::new().expect("Failed to init AppState"));
         let app = create_router(state);
 
         let input = load_input_fixture();
