@@ -465,7 +465,6 @@ fn handle_generate_proof(
     reward_tree_value: Option<String>,
 ) -> Result<()> {
     tracing::info!("Reading input from: {}", input_path.display());
-    let now = Instant::now();
 
     // Read input file
     let input_content = std::fs::read_to_string(&input_path).with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
@@ -540,7 +539,6 @@ fn handle_generate_proof(
     } else {
         println!("{}", output_json);
     }
-    tracing::info!("Proof generation took: {:?}", now.elapsed());
 
     Ok(())
 }

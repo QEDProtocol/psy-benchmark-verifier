@@ -1,5 +1,5 @@
 use std::sync::Arc;
-
+use std::time::Instant;
 use anyhow::{Context, Result};
 use parth_core::{
     crypto::hash::traits::{FromU64x4, MerkleHasher},
@@ -59,6 +59,7 @@ impl AppState {
         worker_reward_tag: Option<QHashOut<F>>,
         reward_tree_value: Option<QHashOut<F>>,
     ) -> Result<(Vec<u8>, QHashOut<F>)> {
+        let now = Instant::now();
         let job_id = input.base.job.job_id;
         let node_type = input.base.node_type;
         let metadata = &input.base.job.metadata;
@@ -101,7 +102,7 @@ impl AppState {
         };
 
         tracing::info!("Proof generation successful, size: {} bytes", proof.len());
-
+        tracing::info!("Generate proof took: {:?}", now.elapsed());
         Ok((proof, reward_tree_value))
     }
 
@@ -124,6 +125,7 @@ impl AppState {
             job_id.circuit_type,
             node_type
         );
+        let now = Instant::now();
 
         // Use reward_tree_value directly if provided, otherwise compute from
         // worker_reward_tag
@@ -220,6 +222,7 @@ impl AppState {
             hex::encode(computed_public_inputs_hash.into_owned_32bytes()),
             hex::encode(metadata.expected_public_inputs_hash.into_owned_32bytes())
         );
+        tracing::info!("Proof verification took: {:?}", now.elapsed());
 
         Ok(())
     }
