@@ -27,6 +27,10 @@ jobs:
             artifact_name: psy-validator-cli-linux-aarch64
             extension: ""
           - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: psy-validator-cli-macos-x86_64
+            extension: ""
+          - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: psy-validator-cli-macos-aarch64
             extension: ""
@@ -57,6 +61,13 @@ jobs:
           mkdir -p ~/.cargo
           echo '[target.aarch64-unknown-linux-gnu]' >> ~/.cargo/config.toml
           echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
+
+      - name: Install macOS SDK for x86_64 (if needed)
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: |
+          # Rust should handle x86_64 cross-compilation on ARM64 macOS automatically
+          # Just ensure the target is installed
+          rustup target add x86_64-apple-darwin || true
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -171,6 +182,7 @@ jobs:
 
             - **Linux x86_64**: `psy-validator-cli-linux-x86_64.tar.gz`
             - **Linux ARM64**: `psy-validator-cli-linux-aarch64.tar.gz`
+            - **macOS x86_64**: `psy-validator-cli-macos-x86_64.tar.gz`
             - **macOS ARM64**: `psy-validator-cli-macos-aarch64.tar.gz`
             - **Windows x86_64**: `psy-validator-cli-windows-x86_64.zip`
 
