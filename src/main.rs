@@ -21,7 +21,7 @@ use tracing_subscriber::{self, EnvFilter};
 #[command(
     name = "psy-validator",
     version,
-    about = "CLI tool for ZK proof generation and verification",
+    about = "CLI tool and HTTP server for ZK proof generation and verification",
     long_about = None
 )]
 struct Cli {
