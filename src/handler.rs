@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::{
     extract::State,
@@ -30,6 +31,7 @@ pub async fn handle_generate_proof(
     State(state): State<Arc<AppState>>,
     Json(request): Json<GenerateProofRequest>,
 ) -> Result<Json<GenerateProofResponse>, ApiError> {
+    let start_time = Instant::now();
     tracing::info!("Received generate_proof request");
 
     let input = request
@@ -55,7 +57,9 @@ pub async fn handle_generate_proof(
 
     let proof_hex = hex::encode(&proof_bytes);
 
+    let elapsed = start_time.elapsed();
     tracing::info!("Proof generated successfully, length: {} bytes", proof_bytes.len());
+    tracing::info!("Generate proof took: {:?}", elapsed);
 
     Ok(Json(GenerateProofResponse {
         proof: proof_hex,

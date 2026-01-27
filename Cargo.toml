@@ -26,6 +26,11 @@ parth_core = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "1
 # Web framework
 axum = { version = "0.8.8", features = ["ws"] }
 tokio = { version = "1.43.0", features = ["full"] }
+# HTTP client
+reqwest = { version = "0.13.1", features = ["json"] }
+
+# Async utilities
+futures = { version = "0.3.31" }
 
 # Serialization
 serde = { version = "1.0.193", features = ["derive"] }
