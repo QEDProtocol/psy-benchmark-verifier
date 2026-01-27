@@ -64,3 +64,7 @@ missing_docs = "warn"
 [dev-dependencies]
 tower = { version = "0.5", features = ["full"] }
 tempfile = "3.8"
+
+[profile.release]
+# thin has minimal overhead vs none (default): https://blog.llvm.org/2016/06/thinlto-scalable-and-incremental-lto.html
+lto = "thin"
