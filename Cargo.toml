@@ -66,5 +66,9 @@ tower = { version = "0.5", features = ["full"] }
 tempfile = "3.8"
 
 [profile.release]
-# thin has minimal overhead vs none (default): https://blog.llvm.org/2016/06/thinlto-scalable-and-incremental-lto.html
-lto = "thin"
+debug = false          # Remove debug symbols (was true - major size contributor)
+strip = "symbols"      # Strip symbols from binary
+lto = true             # Enable Link Time Optimization (best size reduction)
+codegen-units = 1      # Single codegen unit for better optimization
+panic = "abort"        # Smaller panic handling (no unwinding)
+opt-level = 3          # Keep performance (use "s" or "z" for even smaller binaries)
