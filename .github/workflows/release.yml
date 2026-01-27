@@ -1,0 +1,183 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.1.0)'
+        required: true
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: psy-validator-cli-linux-x86_64
+            extension: ""
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: psy-validator-cli-linux-aarch64
+            extension: ""
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: psy-validator-cli-macos-x86_64
+            extension: ""
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: psy-validator-cli-macos-aarch64
+            extension: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: psy-validator-cli-windows-x86_64
+            extension: ".exe"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation dependencies (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Configure cargo for cross-compilation (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          echo '[target.aarch64-unknown-linux-gnu]' >> ~/.cargo/config.toml
+          echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.target }}-
+
+      - name: Build release binary
+        run: |
+          cargo build --release --target ${{ matrix.target }} --bin psy_validator_cli
+
+      - name: Strip binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          strip target/${{ matrix.target }}/release/psy_validator_cli${{ matrix.extension }}
+
+      - name: Compress binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../../${{ matrix.artifact_name }}.tar.gz psy_validator_cli${{ matrix.extension }}
+
+      - name: Compress binary (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          cd target/${{ matrix.target }}/release
+          Compress-Archive -Path psy_validator_cli${{ matrix.extension }} -DestinationPath ../../../../${{ matrix.artifact_name }}.zip -Force
+
+      - name: Upload artifact (Unix)
+        if: matrix.os != 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}.tar.gz
+          retention-days: 1
+
+      - name: Upload artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}.zip
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release-assets/ \;
+          echo "Release assets prepared:"
+          ls -lh release-assets/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_version.outputs.tag }}
+          name: Release ${{ steps.get_version.outputs.version }}
+          body: |
+            ## Release ${{ steps.get_version.outputs.version }}
+
+            ### Downloads
+
+            - **Linux x86_64**: `psy-validator-cli-linux-x86_64.tar.gz`
+            - **Linux ARM64**: `psy-validator-cli-linux-aarch64.tar.gz`
+            - **macOS x86_64**: `psy-validator-cli-macos-x86_64.tar.gz`
+            - **macOS ARM64**: `psy-validator-cli-macos-aarch64.tar.gz`
+            - **Windows x86_64**: `psy-validator-cli-windows-x86_64.zip`
+
+            ### Installation
+
+            **Linux/macOS:**
+            ```bash
+            tar -xzf psy-validator-cli-<platform>.tar.gz
+            chmod +x psy_validator_cli
+            ./psy_validator_cli --help
+            ```
+
+            **Windows:**
+            ```powershell
+            Expand-Archive psy-validator-cli-windows-x86_64.zip
+            .\psy_validator_cli.exe --help
+            ```
+          files: release-assets/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
