@@ -199,6 +199,7 @@ impl AppState {
         );
 
         if verify_result.is_ok() {
+            tracing::info!("Proof verification took: {:?}", now.elapsed());
             tracing::info!("Proof verification successful");
             return Ok(());
         }
@@ -222,7 +223,6 @@ impl AppState {
             hex::encode(computed_public_inputs_hash.into_owned_32bytes()),
             hex::encode(metadata.expected_public_inputs_hash.into_owned_32bytes())
         );
-        tracing::info!("Proof verification took: {:?}", now.elapsed());
 
         Ok(())
     }
