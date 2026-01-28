@@ -31,6 +31,7 @@ reqwest = { version = "0.13.1", features = ["json"] }
 
 # Async utilities
 futures = { version = "0.3.31" }
+once_cell = "1.19"
 
 # Serialization
 serde = { version = "1.0.193", features = ["derive"] }

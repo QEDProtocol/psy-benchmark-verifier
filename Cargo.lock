@@ -2644,6 +2644,7 @@ dependencies = [
  "dotenv",
  "futures",
  "hex",
+ "once_cell",
  "parth_core",
  "plonky2",
  "psy_core",

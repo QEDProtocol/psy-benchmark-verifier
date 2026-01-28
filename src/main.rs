@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     time::Instant,
 };
@@ -6,6 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use futures::future::join_all;
+use once_cell::sync::Lazy;
 use parth_core::{pgoldilocks::QHashOut, protocol::core_types::Q256BitHash};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use psy_validator::{
@@ -20,6 +22,11 @@ use psy_validator::{
 use serde::{Deserialize, Serialize};
 use serde_json;
 use tracing_subscriber::{self, EnvFilter};
+
+static REALM_ROOT_JOS_MAP: Lazy<HashMap<String, String>> = Lazy::new(|| {
+    let content = include_str!("../realm_root_jos_map.json");
+    serde_json::from_str::<HashMap<String, String>>(content).expect("Failed to parse realm_root_jos_map.json")
+});
 
 /// Psy Validator CLI - Zero Knowledge Proof Generation and Verification
 #[derive(Parser, Debug)]
@@ -271,6 +278,14 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
     let start_time = Instant::now();
     tracing::info!("Fetching job with base_url: {}, proof_id: {}", base_url, proof_id);
     tracing::info!("One-click done: {}", one_click_done);
+
+    // Replace proof_id with realm root proof_id if exists in map
+    let proof_id = if let Some(root_proof_id) = REALM_ROOT_JOS_MAP.get(&proof_id) {
+        tracing::info!("Realm root job found, replacing proof_id: {} -> {}", proof_id, root_proof_id);
+        root_proof_id.clone()
+    } else {
+        proof_id
+    };
 
     // Parse proof_id to extract job_id_hex and realm_id
     // proof_id format: job_id_hex (48 chars) + realm_id_hex
@@ -673,11 +688,20 @@ fn parse_proof_file(content: &str) -> Result<(String, Option<String>)> {
 /// realm_id < 1000) Returns (job_id_hex, realm_id)
 fn parse_proof_id(proof_id: &str) -> Result<(String, u64)> {
     const JOB_ID_HEX_LEN: usize = 48; // 24 bytes = 48 hex chars
+    const REALM_ID_HEX_LEN: usize = 4; // 2 bytes = 4 hex chars
 
     if proof_id.len() < JOB_ID_HEX_LEN {
         anyhow::bail!(
             "proof_id too short: expected at least {} characters, got {}",
             JOB_ID_HEX_LEN,
+            proof_id.len()
+        );
+    }
+
+    if proof_id.len() != JOB_ID_HEX_LEN + REALM_ID_HEX_LEN {
+        anyhow::bail!(
+            "proof_id length: expected {} characters, got {}",
+            JOB_ID_HEX_LEN + REALM_ID_HEX_LEN,
             proof_id.len()
         );
     }
