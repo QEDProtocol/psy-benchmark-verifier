@@ -688,7 +688,6 @@ fn parse_proof_file(content: &str) -> Result<(String, Option<String>)> {
 /// realm_id < 1000) Returns (job_id_hex, realm_id)
 fn parse_proof_id(proof_id: &str) -> Result<(String, u64)> {
     const JOB_ID_HEX_LEN: usize = 48; // 24 bytes = 48 hex chars
-    const REALM_ID_HEX_LEN: usize = 4; // 2 bytes = 4 hex chars
 
     if proof_id.len() < JOB_ID_HEX_LEN {
         anyhow::bail!(
@@ -697,15 +696,6 @@ fn parse_proof_id(proof_id: &str) -> Result<(String, u64)> {
             proof_id.len()
         );
     }
-
-    if proof_id.len() != JOB_ID_HEX_LEN + REALM_ID_HEX_LEN {
-        anyhow::bail!(
-            "proof_id length: expected {} characters, got {}",
-            JOB_ID_HEX_LEN + REALM_ID_HEX_LEN,
-            proof_id.len()
-        );
-    }
-
     // Extract job_id_hex from the beginning (48 chars)
     let job_id_hex = proof_id[..JOB_ID_HEX_LEN].to_string();
 
