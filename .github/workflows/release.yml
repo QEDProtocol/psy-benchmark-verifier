@@ -84,23 +84,23 @@ jobs:
 
       - name: Build release binary
         run: |
-          cargo build --release --target ${{ matrix.target }} --bin psy_validator_cli
+          cargo build --release --target ${{ matrix.target }} --bin psy_prover_cli
 
       - name: Strip binary (Unix)
         if: matrix.os != 'windows-latest'
         run: |
           if command -v strip >/dev/null 2>&1; then
-            strip target/${{ matrix.target }}/release/psy_validator_cli${{ matrix.extension }} || true
+            strip target/${{ matrix.target }}/release/psy_prover_cli${{ matrix.extension }} || true
           fi
 
       - name: Compress binary (Unix)
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          if [ -f psy_validator_cli${{ matrix.extension }} ]; then
-            tar czf ../../../../${{ matrix.artifact_name }}.tar.gz psy_validator_cli${{ matrix.extension }}
+          if [ -f psy_prover_cli${{ matrix.extension }} ]; then
+            tar czf ../../../../${{ matrix.artifact_name }}.tar.gz psy_prover_cli${{ matrix.extension }}
           else
-            echo "Error: Binary not found at target/${{ matrix.target }}/release/psy_validator_cli${{ matrix.extension }}"
+            echo "Error: Binary not found at target/${{ matrix.target }}/release/psy_prover_cli${{ matrix.extension }}"
             exit 1
           fi
 
@@ -109,10 +109,10 @@ jobs:
         shell: pwsh
         run: |
           cd target/${{ matrix.target }}/release
-          if (Test-Path psy_validator_cli${{ matrix.extension }}) {
-            Compress-Archive -Path psy_validator_cli${{ matrix.extension }} -DestinationPath ../../../../${{ matrix.artifact_name }}.zip -Force
+          if (Test-Path psy_prover_cli${{ matrix.extension }}) {
+            Compress-Archive -Path psy_prover_cli${{ matrix.extension }} -DestinationPath ../../../../${{ matrix.artifact_name }}.zip -Force
           } else {
-            Write-Error "Error: Binary not found at target/${{ matrix.target }}/release/psy_validator_cli${{ matrix.extension }}"
+            Write-Error "Error: Binary not found at target/${{ matrix.target }}/release/psy_prover_cli${{ matrix.extension }}"
             exit 1
           }
 
@@ -191,14 +191,14 @@ jobs:
             **Linux/macOS:**
             ```bash
             tar -xzf psy-validator-cli-<platform>.tar.gz
-            chmod +x psy_validator_cli
-            ./psy_validator_cli --help
+            chmod +x psy_prover_cli
+            ./psy_prover_cli --help
             ```
 
             **Windows:**
             ```powershell
             Expand-Archive psy-validator-cli-windows-x86_64.zip
-            .\psy_validator_cli.exe --help
+            .\psy_prover_cli.exe --help
             ```
           files: release-assets/*
           draft: false

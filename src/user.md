@@ -1,6 +1,6 @@
 # Psy Validator CLI User Guide
 
-This guide explains how to deploy and use `psy_validator_cli` to generate and verify zero-knowledge proofs.
+This guide explains how to deploy and use `psy_prover_cli` to generate and verify zero-knowledge proofs.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ cd psy-benchmark-verifier
 # Build the validator binary
 cargo build --release
 
-# Binary will be at: target/release/psy_validator_cli
+# Binary will be at: target/release/psy_prover_cli
 ```
 
 ### System Requirements
@@ -41,7 +41,7 @@ cargo build --release
 ### Option 1: Direct Execution
 
 ```bash
-./target/release/psy_validator_cli \
+./target/release/psy_prover_cli \
   --listen-addr 0.0.0.0 \
   --port 4000 \
   --log-level info
@@ -49,7 +49,7 @@ cargo build --release
 
 ### Option 2: Systemd Service (Linux)
 
-1. **Create service file** `/etc/systemd/system/psy_validator_cli.service`:
+1. **Create service file** `/etc/systemd/system/psy_prover_cli.service`:
 
 ```ini
 [Unit]
@@ -60,7 +60,7 @@ Wants=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/psy_validator
-ExecStart=/opt/psy_validator/psy_validator_cli --listen-addr 0.0.0.0 --port 4000 --log-level info
+ExecStart=/opt/psy_validator/psy_prover_cli --listen-addr 0.0.0.0 --port 4000 --log-level info
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65535
@@ -78,18 +78,18 @@ WantedBy=multi-user.target
 ```bash
 # Copy binary to /opt/psy_validator/
 sudo mkdir -p /opt/psy_validator
-sudo cp target/release/psy_validator_cli /opt/psy_validator/
+sudo cp target/release/psy_prover_cli /opt/psy_validator/
 
 # Reload systemd and start service
 sudo systemctl daemon-reload
-sudo systemctl enable psy_validator_cli
-sudo systemctl start psy_validator_cli
+sudo systemctl enable psy_prover_cli
+sudo systemctl start psy_prover_cli
 
 # Check status
-sudo systemctl status psy_validator_cli
+sudo systemctl status psy_prover_cli
 
 # View logs
-sudo journalctl -u psy_validator_cli -f
+sudo journalctl -u psy_prover_cli -f
 ```
 
 ---
@@ -99,7 +99,7 @@ sudo journalctl -u psy_validator_cli -f
 ### Command Line Options
 
 ```bash
-psy_validator_cli [OPTIONS]
+psy_prover_cli [OPTIONS]
 ```
 
 **Options:**
@@ -112,13 +112,13 @@ psy_validator_cli [OPTIONS]
 
 ```bash
 # Default settings (0.0.0.0:4000, info log level)
-./psy_validator_cli
+./psy_prover_cli
 
 # Custom port and log level
-./psy_validator_cli --port 8080 --log-level debug
+./psy_prover_cli --port 8080 --log-level debug
 
 # Listen on specific interface
-./psy_validator_cli --listen-addr 127.0.0.1 --port 4000
+./psy_prover_cli --listen-addr 127.0.0.1 --port 4000
 ```
 
 ### Verify Service is Running
@@ -354,16 +354,16 @@ cat input.json | \
 
 ```bash
 # If using systemd
-sudo journalctl -u psy_validator_cli -n 50
+sudo journalctl -u psy_prover_cli -n 50
 
 # If running directly
-./psy_validator_cli --log-level debug
+./psy_prover_cli --log-level debug
 ```
 
 **Common issues:**
 
 - **Port already in use**: Change port with `--port <different_port>`
-- **Permission denied**: Ensure binary has execute permissions (`chmod +x psy_validator_cli`)
+- **Permission denied**: Ensure binary has execute permissions (`chmod +x psy_prover_cli`)
 - **Missing dependencies**: Ensure all required libraries are installed
 
 ### Proof Generation Fails

@@ -1,6 +1,6 @@
 # Psy Validator API Documentation
 
-This document describes the HTTP APIs exposed by `psy_validator_cli` service.
+This document describes the HTTP APIs exposed by `psy_prover_cli` service.
 
 ## Base URL
 

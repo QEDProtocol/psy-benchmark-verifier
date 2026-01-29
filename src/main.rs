@@ -10,7 +10,7 @@ use futures::future::join_all;
 use once_cell::sync::Lazy;
 use parth_core::{pgoldilocks::QHashOut, protocol::core_types::Q256BitHash};
 use plonky2::field::goldilocks_field::GoldilocksField;
-use psy_validator::{
+use psy_prover::{
     config::{run, Config},
     handler::parse_hex_hash,
     models::{

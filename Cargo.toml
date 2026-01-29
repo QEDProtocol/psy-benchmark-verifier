@@ -1,17 +1,17 @@
 [workspace]
 
 [package]
-name = "psy_validator"
+name = "psy_prover"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.86"
 
 [lib]
-name = "psy_validator"
+name = "psy_prover"
 path = "src/lib.rs"
 
 [[bin]]
-name = "psy_validator_cli"
+name = "psy_prover_cli"
 path = "src/main.rs"
 
 [dependencies]

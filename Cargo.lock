@@ -2624,18 +2624,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "psy_serialize"
-version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
-dependencies = [
- "anyhow",
- "bytemuck",
- "paste",
- "psy_io",
-]
-
-[[package]]
-name = "psy_validator"
+name = "psy_prover"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2661,6 +2650,17 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "psy_serialize"
+version = "0.1.0"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "paste",
+ "psy_io",
 ]
 
 [[package]]

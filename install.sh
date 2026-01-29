@@ -85,9 +85,9 @@ get_latest_version() {
 
 list_assets() {
     info "Available binaries:"
-    echo "  psy_validator_cli_macos_arm64"
-    echo "  psy_validator_cli_ubuntu22.04_amd64"
-    echo "  psy_validator_cli_windows_x64"
+    echo "  psy_prover_cli_macos_arm64"
+    echo "  psy_prover_cli_ubuntu22.04_amd64"
+    echo "  psy_prover_cli_windows_x64"
 }
 
 try_download_asset() {
@@ -119,7 +119,7 @@ try_download_asset() {
         *) error "Unsupported OS: $os" ;;
     esac
 
-    asset_name="psy_validator_cli_${asset_suffix}"
+    asset_name="psy_prover_cli_${asset_suffix}"
     url="https://github.com/$REPO/releases/download/$ver/$asset_name"
     output="$tmp_dir/$asset_name"
 
@@ -168,7 +168,7 @@ EOF
 }
 
 main() {
-    info "Installing psy_validator_cli from $REPO"
+    info "Installing psy_prover_cli from $REPO"
 
     OS=$(detect_os)
     ARCH=$(detect_arch)
@@ -179,7 +179,7 @@ main() {
 
     [ ! -d "$INSTALL_DIR" ] && { info "Creating: $INSTALL_DIR"; mkdir -p "$INSTALL_DIR"; }
 
-    FINAL_PATH="$INSTALL_DIR/psy_validator_cli"
+    FINAL_PATH="$INSTALL_DIR/psy_prover_cli"
 
     # Check if already installed with same version
     if [ -f "$FINAL_PATH" ]; then
@@ -230,6 +230,6 @@ main
 
 [ -z "$PROOF_ID" ] && error "PROOF_ID environment variable is required"
 
-info "Running: $INSTALL_DIR/psy_validator_cli fetch-job -b \"$PSY_DATA_URL\" -p \"$PROOF_ID\""
+info "Running: $INSTALL_DIR/psy_prover_cli fetch-job -b \"$PSY_DATA_URL\" -p \"$PROOF_ID\""
 
-exec "$INSTALL_DIR/psy_validator_cli" fetch-job -b "$PSY_DATA_URL" -p "$PROOF_ID"
+exec "$INSTALL_DIR/psy_prover_cli" fetch-job -b "$PSY_DATA_URL" -p "$PROOF_ID"

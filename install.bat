@@ -16,7 +16,7 @@ for /f "tokens=*" %%i in ('powershell -c "'%PROOF_ID%'.Trim()"') do set "PROOF_I
 
 echo [DEBUG] PROOF_ID=[%PROOF_ID%]
 
-echo [INFO] Installing psy_validator_cli from %REPO%
+echo [INFO] Installing psy_prover_cli from %REPO%
 echo [INFO] Platform: windows/amd64
 
 :: Get latest version
@@ -33,7 +33,7 @@ if not exist "%INSTALL_DIR%" (
     mkdir "%INSTALL_DIR%" 2>nul
 )
 
-set FINAL_PATH=%INSTALL_DIR%\psy_validator_cli.exe
+set FINAL_PATH=%INSTALL_DIR%\psy_prover_cli.exe
 
 :: Check if already installed
 if exist "%FINAL_PATH%" (
@@ -43,7 +43,7 @@ if exist "%FINAL_PATH%" (
 )
 
 :: Download binary
-set ASSET_NAME=psy_validator_cli_windows_x64.exe
+set ASSET_NAME=psy_prover_cli_windows_x64.exe
 set DOWNLOAD_URL=https://github.com/%REPO%/releases/download/%VERSION%/%ASSET_NAME%
 set DOWNLOAD_PATH=%TEMP%\%ASSET_NAME%
 
