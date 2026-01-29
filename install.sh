@@ -124,7 +124,7 @@ try_download_asset() {
     output="$tmp_dir/$asset_name"
 
     printf "  Downloading: %s ... " "$asset_name" >&2
-    if curl -fsSL --connect-timeout 5 --max-time 300 -o "$output" "$url" 2>/dev/null; then
+    if curl -fsSL --connect-timeout 30 --max-time 600 -o "$output" "$url" 2>/dev/null; then
         echo "OK" >&2
         chmod +x "$output"
         echo "$output"

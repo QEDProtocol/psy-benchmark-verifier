@@ -54,7 +54,7 @@ echo [DEBUG] URL: %DOWNLOAD_URL%
 if exist "%DOWNLOAD_PATH%" del "%DOWNLOAD_PATH%" >nul 2>&1
 
 :: Try curl first, then powershell
-powershell -c "try { Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%DOWNLOAD_PATH%' -UseBasicParsing } catch { exit 1 }" >nul 2>&1
+powershell -c "try { Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%DOWNLOAD_PATH%' -UseBasicParsing -TimeoutSec 600 } catch { exit 1 }" >nul 2>&1
 if not exist "%DOWNLOAD_PATH%" (
     echo [ERROR] Download failed - binary not found for windows/amd64
     exit /b 1
