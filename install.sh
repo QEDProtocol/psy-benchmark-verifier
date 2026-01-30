@@ -2,7 +2,7 @@
 set -e
 
 REPO="QEDProtocol/psy-benchmark-verifier"
-INSTALL_DIR="$HOME/.psy"
+INSTALL_DIR="${TMPDIR:-/tmp}/psy"
 VERSION=""
 PSY_DATA_URL="https://psy-benchmark-round1-data.psy-protocol.xyz"
 
@@ -151,7 +151,7 @@ Usage: PROOF_ID=xxx install.sh [options]
 
 Options:
   -v, --version VER    Install specific version (default: latest)
-  -d, --dir DIR        Install directory (default: ~/.psy)
+  -d, --dir DIR        Install directory (default: $TMPDIR/psy or /tmp/psy)
   -l, --list           List available binaries
   -h, --help           Show this help
 
