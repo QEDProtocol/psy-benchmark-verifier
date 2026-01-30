@@ -1,13 +1,17 @@
-use std::sync::Arc;
-use std::time::Instant;
+use std::{
+    sync::{Arc, RwLock},
+    time::Instant,
+};
+
 use anyhow::{Context, Result};
+use once_cell::sync::Lazy;
 use parth_core::{
     crypto::hash::traits::{FromU64x4, MerkleHasher},
     data::serializable::QPDSerializable,
     pgoldilocks::{PoseidonHasher, QHashOut},
     protocol::core_types::{Q256BitHash, QZKProofPublicInputsHasherReader, QZKProofVerifier},
 };
-use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::{field::goldilocks_field::GoldilocksField, plonk::proof::ProofWithPublicInputs};
 use psy_core::{
     constants::chain_id::PsyChainNetworkType,
     job::job_id::{ProvingJobCircuitType, QProvingJobDataID},
@@ -26,13 +30,31 @@ type C = plonky2::plonk::config::PoseidonGoldilocksConfig;
 type F = GoldilocksField;
 const D: usize = 2;
 
+#[derive(Clone, Debug)]
+pub enum Action {
+    GenerateProof,
+    VerifyProof,
+}
+
+#[derive(Clone, Debug)]
+pub struct Metrics {
+    pub action_type: Action,
+    pub time_ms: u64,
+    pub circuit_type: ProvingJobCircuitType,
+    pub public_inputs: Vec<F>,
+}
+
 /// Application state holding circuit library, prover, and verifier
 #[derive(Clone)]
 pub struct AppState {
     pub circuit_library: Arc<SimpleCircuitLibrary<F>>,
     pub prover: Arc<QEDCoordinatorCircuitManager<C, D>>,
     pub verifier: Arc<PsyPlonky2ZKVerifier<C, D>>,
+    pub metricses: Arc<RwLock<Vec<Metrics>>>,
 }
+
+/// Global AppState singleton - initialized once and shared
+pub static APP_STATE: Lazy<Result<AppState, anyhow::Error>> = Lazy::new(AppState::new);
 
 impl AppState {
     /// Initialize application state with plonky2 circuits for LocalDevnet
@@ -48,6 +70,7 @@ impl AppState {
             circuit_library: Arc::new(gcv.library),
             prover: Arc::new(coordinator_circuits),
             verifier: Arc::new(verifier),
+            metricses: Arc::new(RwLock::new(vec![])),
         })
     }
 
@@ -101,8 +124,28 @@ impl AppState {
             }
         };
 
+        let proving_time = now.elapsed();
+
         tracing::info!("Proof generation successful, size: {} bytes", proof.len());
         tracing::info!("Generate proof took: {:?}", now.elapsed());
+
+        {
+            let proof_time_ms = proving_time.as_millis() as u64;
+            let plonky2_proof: ProofWithPublicInputs<F, C, D> = bincode::deserialize(&proof).context("Failed to deserialize proof")?;
+            let public_inputs = plonky2_proof.public_inputs.to_vec();
+
+            let mut metricses = self
+                .metricses
+                .write()
+                .map_err(|e| anyhow::anyhow!("Failed to lock metrics for writing: {}", e))?;
+            metricses.push(Metrics {
+                action_type: Action::GenerateProof,
+                time_ms: proof_time_ms,
+                circuit_type: job_id.circuit_type,
+                public_inputs,
+            });
+        }
+
         Ok((proof, reward_tree_value))
     }
 
@@ -198,6 +241,20 @@ impl AppState {
             full_expected_public_inputs_hash,
         );
 
+        let verify_time_ms = now.elapsed().as_millis() as u64;
+        {
+            let mut metricses = self
+                .metricses
+                .write()
+                .map_err(|e| anyhow::anyhow!("Failed to lock metrics for writing: {}", e))?;
+            metricses.push(Metrics {
+                action_type: Action::VerifyProof,
+                time_ms: verify_time_ms,
+                circuit_type: job_id.circuit_type,
+                public_inputs: vec![],
+            });
+        }
+
         if verify_result.is_ok() {
             tracing::info!("Proof verification took: {:?}", now.elapsed());
             tracing::info!("Proof verification successful");
@@ -223,6 +280,25 @@ impl AppState {
             hex::encode(computed_public_inputs_hash.into_owned_32bytes()),
             hex::encode(metadata.expected_public_inputs_hash.into_owned_32bytes())
         );
+
+        Ok(())
+    }
+
+    /// Print all metrics collected
+    pub fn print_metrics(&self) -> Result<()> {
+        let metrics = self
+            .metricses
+            .read()
+            .map_err(|e| anyhow::anyhow!("Failed to lock metrics for reading: {}", e))?;
+        if metrics.is_empty() {
+            tracing::info!("No metrics collected");
+            return Ok(());
+        }
+
+        tracing::info!("=== Metrics Summary ===");
+        for (i, m) in metrics.iter().enumerate() {
+            tracing::info!("[{}] {:?} - time: {}ms, circuit: {:?}", i, m.action_type, m.time_ms, m.circuit_type);
+        }
 
         Ok(())
     }

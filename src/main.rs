@@ -17,7 +17,8 @@ use psy_prover::{
         GenerateProofRequest, GenerateProofResponse, PsyProvingJobMetadataJson, PsyProvingJobMetadataWithJobIdJson,
         PsyWorkerGetProvingWorkAPIResponseJson, PsyWorkerGetProvingWorkWithChildProofsAPIResponseJson, VerifyProofRequest, VerifyProofResponse,
     },
-    services::{derive_worker_reward_tag_from_job_id, AppState},
+    services::{derive_worker_reward_tag_from_job_id, APP_STATE},
+    AppState,
 };
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -147,7 +148,10 @@ async fn main() -> anyhow::Result<()> {
             output_dir,
             one_click_done,
         } => fetch_job(base_url, proof_id, output_dir, one_click_done).await,
-    }
+    }?;
+    let app_state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
+    app_state.print_metrics();
+    Ok(())
 }
 
 /// Fetch raw_proof.json for a single dependency
@@ -497,7 +501,7 @@ fn handle_generate_proof(
 
     // Initialize AppState
     tracing::info!("Initializing circuit library and prover...");
-    let state = AppState::new().context("Failed to initialize AppState")?;
+    let state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
 
     // Convert request to internal format
     let input = request.input.to_internal().context("Failed to convert input to internal format")?;
@@ -606,7 +610,7 @@ fn handle_verify_proof(input_path: PathBuf, proof_path: PathBuf, worker_reward_t
 
     // Initialize AppState
     tracing::info!("Initializing circuit library and verifier...");
-    let state = AppState::new().context("Failed to initialize AppState")?;
+    let state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
 
     // Convert request to internal format
     let input = request.input.to_internal().context("Failed to convert input to internal format")?;
