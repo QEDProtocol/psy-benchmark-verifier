@@ -393,7 +393,7 @@ checksum = "6d43a04d8753f35258c91f8ec639f792891f748a1edbd759cf1dcea3382ad83c"
 [[package]]
 name = "cf_utils"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2062,7 +2062,7 @@ dependencies = [
 [[package]]
 name = "parth_common"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2087,7 +2087,7 @@ dependencies = [
 [[package]]
 name = "parth_core"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2121,7 +2121,7 @@ dependencies = [
 [[package]]
 name = "parth_crypto"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "parth_core",
@@ -2140,7 +2140,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 [[package]]
 name = "pderive"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2329,7 +2329,7 @@ dependencies = [
 [[package]]
 name = "pser"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "bincode",
@@ -2346,7 +2346,7 @@ dependencies = [
 [[package]]
 name = "psy_api_core"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2382,7 +2382,7 @@ dependencies = [
 [[package]]
 name = "psy_common"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2409,7 +2409,7 @@ dependencies = [
 [[package]]
 name = "psy_core"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2439,7 +2439,7 @@ dependencies = [
 [[package]]
 name = "psy_data"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2474,7 +2474,7 @@ dependencies = [
 [[package]]
 name = "psy_dummy_prover"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2514,7 +2514,7 @@ dependencies = [
 [[package]]
 name = "psy_io"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2528,7 +2528,7 @@ dependencies = [
 [[package]]
 name = "psy_plonky2_basic_helpers"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2559,7 +2559,7 @@ dependencies = [
 [[package]]
 name = "psy_plonky2_circuits"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2596,7 +2596,7 @@ dependencies = [
 [[package]]
 name = "psy_plonky2_common_circuits"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2656,7 +2656,7 @@ dependencies = [
 [[package]]
 name = "psy_serialize"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2667,7 +2667,7 @@ dependencies = [
 [[package]]
 name = "psy_worker_core"
 version = "0.1.0"
-source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=11c976e69a6ad2c851d54600dfce92eaf3923b3d#11c976e69a6ad2c851d54600dfce92eaf3923b3d"
+source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=22fc36fbd03743c89c3083d576722a2e0e3b4bc5#22fc36fbd03743c89c3083d576722a2e0e3b4bc5"
 dependencies = [
  "anyhow",
  "async-trait",
