@@ -270,7 +270,10 @@ async fn prove_job(req: GenerateProofRequest,job_id: &str, circuit_type: &str) -
     Ok((hex::decode(&ret.proof)?,elapsed))
 }
 
-async fn fetch_benchmark_time(job_id: &str, realm_id: u32) -> Result<u64> {
+async fn fetch_benchmark_time(job_id: &str, mut realm_id: u32) -> Result<u64> {
+    if realm_id < 999 {
+        realm_id += 1;
+    }
     let url = format!(
         "https://psy-block-visualizer-counter.team-81c.workers.dev/spend-time?job_id={}&realm_id={}",
         job_id, realm_id
