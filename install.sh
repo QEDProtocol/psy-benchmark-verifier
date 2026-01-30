@@ -2,7 +2,7 @@
 set -e
 
 REPO="QEDProtocol/psy-benchmark-verifier"
-INSTALL_DIR="$HOME/.psy"
+INSTALL_DIR="${TMPDIR:-/tmp}/psy"
 VERSION=""
 PSY_DATA_URL="https://psy-benchmark-round1-data.psy-protocol.xyz"
 
@@ -89,7 +89,7 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  -v, --version VERSION  Use specific release version (default: latest)"
-    echo "  -d, --dir DIR         Install directory (default: \$HOME/.psy)"
+    echo "  -d, --dir DIR         Install directory (default: \$TMPDIR/psy or /tmp/psy)"
     echo "  -l, --list            List available binary assets and exit"
     echo "  -h, --help            Show this help"
 }

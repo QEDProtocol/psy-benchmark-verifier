@@ -2,7 +2,7 @@
 setlocal
 
 set REPO=QEDProtocol/psy-benchmark-verifier
-set INSTALL_DIR=%USERPROFILE%\.psy
+set INSTALL_DIR=%TEMP%\psy
 set VERSION=
 set PSY_DATA_URL=https://psy-benchmark-round1-data.psy-protocol.xyz
 
