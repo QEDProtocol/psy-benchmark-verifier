@@ -163,7 +163,7 @@ async fn fetch_dependency_proof(
     node_type: u8,
     job: &ParsedJobId,
     dep_job_id: &str,
-    output_dir: &Path,
+    _output_dir: &Path,
 ) -> Result<Option<String>> {
     // Format: {base_url}/output/{realm_id}/{dep_job_id}/raw_proof.json
     let raw_proof_url = format!("{}/output/{}/{}/raw_proof.json", base_url, realm_id, dep_job_id);
@@ -237,13 +237,13 @@ async fn fetch_dependency_proof(
             raw_proof.proof.len()
         );
 
-        // Save raw_proof.json for this dependency (optional, for debugging)
-        let dep_proof_path = output_dir.join(format!("raw_proof_{}.json", dep_job_id));
-        let raw_proof_json =
-            serde_json::to_string_pretty(&raw_proof).with_context(|| format!("Failed to serialize raw_proof.json for dependency {}", dep_job_id))?;
-        std::fs::write(&dep_proof_path, &raw_proof_json)
-            .with_context(|| format!("Failed to write {} for dependency {}", dep_proof_path.display(), dep_job_id))?;
-        tracing::debug!("Saved raw_proof.json for dependency {} to {}", dep_job_id, dep_proof_path.display());
+        // Save raw_proof.json for this dependency (optional, for debugging) - commented out
+        // let dep_proof_path = output_dir.join(format!("raw_proof_{}.json", dep_job_id));
+        // let raw_proof_json =
+        //     serde_json::to_string_pretty(&raw_proof).with_context(|| format!("Failed to serialize raw_proof.json for dependency {}", dep_job_id))?;
+        // std::fs::write(&dep_proof_path, &raw_proof_json)
+        //     .with_context(|| format!("Failed to write {} for dependency {}", dep_proof_path.display(), dep_job_id))?;
+        // tracing::debug!("Saved raw_proof.json for dependency {} to {}", dep_job_id, dep_proof_path.display());
 
         raw_proof.proof
     } else {
@@ -261,16 +261,16 @@ async fn fetch_dependency_proof(
             proof_text_trimmed.to_string()
         };
 
-        // Save raw_proof.json for this dependency (save as plain hex string)
-        let dep_proof_path = output_dir.join(format!("raw_proof_{}.json", dep_job_id));
-        std::fs::write(&dep_proof_path, &hex_string)
-            .with_context(|| format!("Failed to write {} for dependency {}", dep_proof_path.display(), dep_job_id))?;
-        tracing::debug!(
-            "Saved raw_proof.json for dependency {} to {} (plain hex format, length: {} chars)",
-            dep_job_id,
-            dep_proof_path.display(),
-            hex_string.len()
-        );
+        // Save raw_proof.json for this dependency (save as plain hex string) - commented out
+        // let dep_proof_path = output_dir.join(format!("raw_proof_{}.json", dep_job_id));
+        // std::fs::write(&dep_proof_path, &hex_string)
+        //     .with_context(|| format!("Failed to write {} for dependency {}", dep_proof_path.display(), dep_job_id))?;
+        // tracing::debug!(
+        //     "Saved raw_proof.json for dependency {} to {} (plain hex format, length: {} chars)",
+        //     dep_job_id,
+        //     dep_proof_path.display(),
+        //     hex_string.len()
+        // );
 
         hex_string
     };
@@ -310,7 +310,7 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
     // Determine output directory and create realm_id subdirectory
     let base_output_dir = output_dir.unwrap_or_else(|| PathBuf::from("."));
     let output_dir = base_output_dir.join(realm_id.to_string());
-    std::fs::create_dir_all(&output_dir).with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
+    // std::fs::create_dir_all(&output_dir).with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
     tracing::debug!("Output directory: {}", output_dir.display());
 
     let job = parse_job_id(&hex::decode(&job_id).context("Failed to decode job ID")?);
@@ -335,23 +335,19 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
         .get(&raw_input_url)
         .send()
         .await
-        .context("Failed to send HTTP request for raw_input.json")?;
+        .context("Failed to send HTTP request for raw input")?;
 
     if !response.status().is_success() {
-        anyhow::bail!(
-            "Failed to fetch raw_input.json: HTTP {} - {}",
-            response.status(),
-            response.text().await.unwrap_or_default()
-        );
+        anyhow::bail!("Failed to fetch raw input: {}", response.status());
     }
 
     let raw_input: RawInputJson = response.json().await.context("Failed to parse raw_input.json response")?;
 
-    // Save raw_input.json with job_id in filename
-    let raw_input_path = output_dir.join(format!("raw_input_{}.json", job_id));
-    let raw_input_json = serde_json::to_string_pretty(&raw_input).context("Failed to serialize raw_input.json")?;
-    std::fs::write(&raw_input_path, &raw_input_json).with_context(|| format!("Failed to write raw_input.json: {}", raw_input_path.display()))?;
-    tracing::debug!("Saved raw_input.json to: {}", raw_input_path.display());
+    // Save raw_input.json with job_id in filename - commented out
+    // let raw_input_path = output_dir.join(format!("raw_input_{}.json", job_id));
+    // let raw_input_json = serde_json::to_string_pretty(&raw_input).context("Failed to serialize raw_input.json")?;
+    // std::fs::write(&raw_input_path, &raw_input_json).with_context(|| format!("Failed to write raw_input.json: {}", raw_input_path.display()))?;
+    // tracing::debug!("Saved raw_input.json to: {}", raw_input_path.display());
 
     // Fetch raw_proof.json for each dependency in parallel
     tracing::debug!("Fetching {} dependencies in parallel", raw_input.metadata.dependencies.len());
@@ -436,80 +432,59 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
         reward_tree_value: None, // Will be computed automatically if not provided
     };
 
-    // Save input.json with job_id in filename
-    let input_path = output_dir.join(format!("input_{}.json", job_id));
-    let input_json_str = serde_json::to_string_pretty(&input_json).context("Failed to serialize input.json")?;
-    std::fs::write(&input_path, &input_json_str).with_context(|| format!("Failed to write input.json: {}", input_path.display()))?;
-    tracing::debug!("Saved input.json to: {}", input_path.display());
+    // Save input.json with job_id in filename - commented out
+    let _input_path = output_dir.join(format!("input_{}.json", job_id));
 
     let elapsed = start_time.elapsed();
     tracing::debug!("Job fetch completed in: {:?}", elapsed);
 
-    // One-click workflow: generate_proof -> verify_proof
+    // One-click workflow: generate_proof -> verify_proof (in-memory, no file I/O)
     if one_click_done {
-        tracing::debug!("Starting one-click workflow: generate_proof -> verify_proof");
+        tracing::debug!("Starting one-click workflow: generate_proof -> verify_proof (in-memory)");
 
-        let proof_path = output_dir.join(format!("proof_{}.json", job_id));
-
-        // Step 1: Generate proof
+        // Step 1: Generate proof from in-memory input_json
         tracing::debug!("Step 1/2: Generating proof...");
-        handle_generate_proof(
-            input_path.clone(),
-            Some(proof_path.clone()),
-            None, // worker_reward_tag (will be derived automatically)
-            None, // reward_tree_value (will be computed automatically)
-        )
-        .context("Failed to generate proof in one-click workflow")?;
+        let gen_response = do_generate_proof(input_json.clone(), None, None)
+            .context("Failed to generate proof in one-click workflow")?;
         tracing::debug!("Proof generated successfully");
 
-        // Step 2: Verify proof
+        // Step 2: Verify proof using in-memory input and proof response
         tracing::debug!("Step 2/2: Verifying proof...");
-        handle_verify_proof(
-            input_path, proof_path, None, // worker_reward_tag (will be extracted from proof.json if needed)
-            None, // reward_tree_value (will be extracted from proof.json)
-        )
-        .context("Failed to verify proof in one-click workflow")?;
-        // tracing::info!("Proof verified successfully");
-
+        let verify_request = VerifyProofRequest {
+            input: input_json.input.clone(),
+            proof: gen_response.proof.clone(),
+            worker_reward_tag: Some(gen_response.worker_reward_tag.clone()),
+            reward_tree_value: Some(gen_response.reward_tree_value.clone()),
+        };
+        let verify_response = do_verify_proof(&verify_request).context("Failed to verify proof in one-click workflow")?;
+        if !verify_response.valid {
+            anyhow::bail!("One-click verify failed: {:?}", verify_response.message);
+        }
         tracing::debug!("One-click workflow completed successfully!");
     }
 
     Ok(())
 }
 
-fn handle_generate_proof(
-    input_path: PathBuf,
-    output_path: Option<PathBuf>,
-    worker_reward_tag: Option<String>,
-    reward_tree_value: Option<String>,
-) -> Result<()> {
-    tracing::debug!("Reading input from: {}", input_path.display());
-
-    // Read input file
-    let input_content = std::fs::read_to_string(&input_path).with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
-
-    let mut request: GenerateProofRequest =
-        serde_json::from_str(&input_content).with_context(|| format!("Failed to parse input JSON: {}", input_path.display()))?;
-
-    // Override with CLI arguments if provided
-    if let Some(tag) = worker_reward_tag {
+/// Generate proof from in-memory request. No file I/O.
+fn do_generate_proof(
+    mut request: GenerateProofRequest,
+    worker_reward_tag_override: Option<String>,
+    reward_tree_value_override: Option<String>,
+) -> Result<GenerateProofResponse> {
+    if let Some(tag) = worker_reward_tag_override {
         request.worker_reward_tag = Some(tag);
     }
-    if let Some(rtv) = reward_tree_value {
+    if let Some(rtv) = reward_tree_value_override {
         request.reward_tree_value = Some(rtv);
     }
 
-    // Initialize AppState
     println!("Initializing circuit library...");
     let state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
 
-    // Convert request to internal format
     let input = request.input.to_internal().context("Failed to convert input to internal format")?;
+    let job_id = input.base.job.job_id.clone();
 
-    // Get job_id for deriving worker_reward_tag if needed
-    let job_id = input.base.job.job_id;
-
-    // Parse worker_reward_tag and reward_tree_value
     let worker_reward_tag = match request.worker_reward_tag.as_deref() {
         Some(tag_hex) => {
             let tag = parse_hex_hash(tag_hex).map_err(|e| anyhow::anyhow!("Invalid worker_reward_tag: {}", e))?;
@@ -524,101 +499,55 @@ fn handle_generate_proof(
         .map(|hex| parse_hex_hash(hex).map_err(|e| anyhow::anyhow!("Invalid reward_tree_value: {}", e)))
         .transpose()?;
 
-    // Generate proof
-    tracing::info!("Generating proof...");
+    tracing::debug!("Generating proof...");
     let (proof_bytes, computed_reward_tree_value) = state
         .generate_proof(input, worker_reward_tag, reward_tree_value)
         .context("Proof generation failed")?;
 
-    // Derive worker_reward_tag if not provided (for response)
-    // Use the same approach as handler.rs: derive from job_id if not provided
     let final_worker_reward_tag: QHashOut<GoldilocksField> = if let Some(tag) = worker_reward_tag {
         tag
     } else {
         derive_worker_reward_tag_from_job_id(job_id).context("Failed to derive worker_reward_tag")?
     };
 
-    // Convert computed_reward_tree_value to bytes
-    // The type is QHashOut<F> where F = GoldilocksField
     let reward_tree_value_bytes: [u8; 32] = computed_reward_tree_value.into_owned_32bytes();
 
-    // Create response
-    let response = GenerateProofResponse {
+    Ok(GenerateProofResponse {
         proof: hex::encode(&proof_bytes),
         worker_reward_tag: hex::encode(final_worker_reward_tag.into_owned_32bytes()),
         reward_tree_value: hex::encode(reward_tree_value_bytes),
-    };
+    })
+}
 
-    // Output result
+fn handle_generate_proof(
+    input_path: PathBuf,
+    output_path: Option<PathBuf>,
+    worker_reward_tag: Option<String>,
+    reward_tree_value: Option<String>,
+) -> Result<()> {
+    tracing::debug!("Reading input from: {}", input_path.display());
+    let input_content = std::fs::read_to_string(&input_path).with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
+    let request: GenerateProofRequest =
+        serde_json::from_str(&input_content).with_context(|| format!("Failed to parse input JSON: {}", input_path.display()))?;
+
+    let response = do_generate_proof(request, worker_reward_tag, reward_tree_value)?;
     let output_json = serde_json::to_string_pretty(&response).context("Failed to serialize response to JSON")?;
-
-    if let Some(output) = output_path {
-        std::fs::write(&output, output_json).with_context(|| format!("Failed to write output file: {}", output.display()))?;
-        tracing::debug!("Proof written to: {}", output.display());
+    if output_path.is_some() {
+        println!("{}", output_json);
     } else {
         println!("{}", output_json);
     }
-
     Ok(())
 }
 
-fn handle_verify_proof(input_path: PathBuf, proof_path: PathBuf, worker_reward_tag: Option<String>, reward_tree_value: Option<String>) -> Result<()> {
-    tracing::debug!("Reading input from: {}", input_path.display());
-    tracing::debug!("Reading proof from: {}", proof_path.display());
-
-    // Read input file
-    let input_content = std::fs::read_to_string(&input_path).with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
-
-    // Try to parse as VerifyProofRequest first, then fallback to
-    // GenerateProofRequest
-    let mut request: VerifyProofRequest = if let Ok(verify_req) = serde_json::from_str::<VerifyProofRequest>(&input_content) {
-        verify_req
-    } else if let Ok(generate_req) = serde_json::from_str::<GenerateProofRequest>(&input_content) {
-        // Convert GenerateProofRequest to VerifyProofRequest
-        VerifyProofRequest {
-            input: generate_req.input,
-            proof: String::new(), // Will be filled from proof_path
-            worker_reward_tag: generate_req.worker_reward_tag,
-            reward_tree_value: generate_req.reward_tree_value,
-        }
-    } else {
-        anyhow::bail!(
-            "Failed to parse input JSON: {}. Expected VerifyProofRequest or GenerateProofRequest format",
-            input_path.display()
-        );
-    };
-
-    // Read proof file
-    let proof_content = std::fs::read_to_string(&proof_path).with_context(|| format!("Failed to read proof file: {}", proof_path.display()))?;
-
-    // Parse proof file - support both JSON format and plain hex string
-    let (proof_hex, proof_reward_tree_value) = parse_proof_file(&proof_content)?;
-
-    // Override with CLI arguments if provided
-    if let Some(tag) = worker_reward_tag {
-        request.worker_reward_tag = Some(tag);
-    }
-    if let Some(rtv) = reward_tree_value {
-        request.reward_tree_value = Some(rtv);
-    } else if let Some(rtv) = proof_reward_tree_value {
-        // Use reward_tree_value from proof file if not provided via CLI
-        request.reward_tree_value = Some(rtv);
-    }
-
-    // Update request with proof from file
-    request.proof = proof_hex;
-
-    // Initialize AppState
+/// Verify proof from in-memory request (request.proof and optional tags must be set). No file I/O.
+fn do_verify_proof(request: &VerifyProofRequest) -> Result<VerifyProofResponse> {
     println!("Initializing circuit library...");
     let state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
 
-    // Convert request to internal format
     let input = request.input.to_internal().context("Failed to convert input to internal format")?;
-
-    // Parse proof bytes
     let proof_bytes = hex::decode(&request.proof).context("Failed to decode proof hex string")?;
 
-    // Parse worker_reward_tag and reward_tree_value
     let worker_reward_tag = request
         .worker_reward_tag
         .as_deref()
@@ -631,12 +560,10 @@ fn handle_verify_proof(input_path: PathBuf, proof_path: PathBuf, worker_reward_t
         .map(|hex| parse_hex_hash(hex).map_err(|e| anyhow::anyhow!("Invalid reward_tree_value: {}", e)))
         .transpose()?;
 
-    // Verify proof
     tracing::debug!("Verifying proof...");
     let verify_result = state.verify_proof(input, &proof_bytes, worker_reward_tag, reward_tree_value);
 
-    // Create response
-    let response = match verify_result {
+    Ok(match verify_result {
         Ok(()) => VerifyProofResponse {
             valid: true,
             message: Some("Proof is valid".to_string()),
@@ -648,18 +575,50 @@ fn handle_verify_proof(input_path: PathBuf, proof_path: PathBuf, worker_reward_t
                 message: Some(format!("Verification failed: {}", e)),
             }
         }
+    })
+}
+
+fn handle_verify_proof(input_path: PathBuf, proof_path: PathBuf, worker_reward_tag: Option<String>, reward_tree_value: Option<String>) -> Result<()> {
+    tracing::debug!("Reading input from: {}", input_path.display());
+    tracing::debug!("Reading proof from: {}", proof_path.display());
+
+    let input_content = std::fs::read_to_string(&input_path).with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
+
+    let mut request: VerifyProofRequest = if let Ok(verify_req) = serde_json::from_str::<VerifyProofRequest>(&input_content) {
+        verify_req
+    } else if let Ok(generate_req) = serde_json::from_str::<GenerateProofRequest>(&input_content) {
+        VerifyProofRequest {
+            input: generate_req.input,
+            proof: String::new(),
+            worker_reward_tag: generate_req.worker_reward_tag,
+            reward_tree_value: generate_req.reward_tree_value,
+        }
+    } else {
+        anyhow::bail!(
+            "Failed to parse input JSON: {}. Expected VerifyProofRequest or GenerateProofRequest format",
+            input_path.display()
+        );
     };
 
-    // Output result
+    let proof_content = std::fs::read_to_string(&proof_path).with_context(|| format!("Failed to read proof file: {}", proof_path.display()))?;
+    let (proof_hex, proof_reward_tree_value) = parse_proof_file(&proof_content)?;
+
+    if let Some(tag) = worker_reward_tag {
+        request.worker_reward_tag = Some(tag);
+    }
+    if let Some(rtv) = reward_tree_value {
+        request.reward_tree_value = Some(rtv);
+    } else if let Some(rtv) = proof_reward_tree_value {
+        request.reward_tree_value = Some(rtv);
+    }
+    request.proof = proof_hex;
+
+    let response = do_verify_proof(&request)?;
     let output_json = serde_json::to_string_pretty(&response).context("Failed to serialize response to JSON")?;
-
-    tracing::debug!("output result： {}", output_json);
-
-    // Return error if verification failed
+    tracing::debug!("output result: {}", output_json);
     if !response.valid {
         std::process::exit(1);
     }
-
     Ok(())
 }
 

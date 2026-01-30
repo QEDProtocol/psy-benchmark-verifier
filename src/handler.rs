@@ -30,7 +30,7 @@ pub async fn handle_generate_proof(
     State(state): State<Arc<AppState>>,
     Json(request): Json<GenerateProofRequest>,
 ) -> Result<Json<GenerateProofResponse>, ApiError> {
-    tracing::info!("Received generate_proof request");
+    tracing::debug!("Received generate_proof request");
 
     let input = request
         .input
@@ -55,7 +55,7 @@ pub async fn handle_generate_proof(
 
     let proof_hex = hex::encode(&proof_bytes);
 
-    tracing::info!("Proof generated successfully, length: {} bytes", proof_bytes.len());
+    tracing::debug!("Proof generated successfully, length: {} bytes", proof_bytes.len());
 
     Ok(Json(GenerateProofResponse {
         proof: proof_hex,
