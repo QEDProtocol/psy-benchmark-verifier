@@ -206,8 +206,6 @@ fn print_logo() {
 async fn initialize_circuits() -> Result<()> {
     let spinner = Spinner::new("Initializing Circuits (one time run, this may take a few seconds)...".to_string());
 
-    // Simulate initialization
-    // sleep(Duration::from_millis(1500)).await;
     let _ = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
 
     spinner.finish("Initializing Circuits (one time run, this may take a few seconds)...").await;
@@ -230,8 +228,6 @@ async fn receive_proving_request(job_id: &str, realm_id: u32,) -> Result<RawInpu
 async fn retrieve_witness(raw_input: RawInputJson,job_id: &str, realm_id: u32) -> Result<GenerateProofRequest> {
     let spinner = Spinner::new("Retrieving Witness from Benchmark Server...".to_string());
 
-    // Simulate witness retrieval
-    // sleep(Duration::from_millis(800)).await;
     let witness = fetch_dependency_proofs(raw_input, BASE_URL, job_id.to_string(), realm_id).await?;
 
 
@@ -248,13 +244,6 @@ async fn prove_job(req: GenerateProofRequest,job_id: &str, circuit_type: &str) -
     let spinner = Spinner::new(msg.clone());
 
     let start = Instant::now();
-
-    // Simulate proving (random time between 300-700ms)
-    // let prove_time = 300 + (std::time::SystemTime::now()
-    //     .duration_since(std::time::UNIX_EPOCH)
-    //     .unwrap()
-    //     .subsec_millis() % 400);
-    // sleep(Duration::from_millis(prove_time as u64)).await;
 
     let ret = do_generate_proof(req, None, None)
         .context("Failed to generate proof")?;
@@ -301,35 +290,31 @@ async fn fetch_benchmark_time(job_id: &str, mut realm_id: u32) -> Result<u64> {
 
 fn print_results(your_time_ms: u64, benchmark_time_ms: u64) {
 
-    let benchmark_color = if your_time_ms < benchmark_time_ms {
-        format!("{}ms", benchmark_time_ms).green()
-    } else if your_time_ms > benchmark_time_ms {
-        format!("{}ms", benchmark_time_ms).red()
+    let benchmark_color = if your_time_ms >benchmark_time_ms {
+        format!("{}ms", benchmark_time_ms).green().bold()
+    } else if your_time_ms < benchmark_time_ms {
+        format!("{}ms", benchmark_time_ms).yellow().bold()
     } else {
-        format!("{}ms", benchmark_time_ms).yellow()
+        format!("{}ms", benchmark_time_ms).yellow().bold()
     };
 
     println!("Benchmark machine proving time: {}", benchmark_color);
 
-    let comparison = if your_time_ms < benchmark_time_ms {
-        format!(
-            "Your computer is {} (Benchmark machine time {}ms).",
-            "Faster".green().bold(),
-            benchmark_time_ms
-        )
-    } else if your_time_ms > benchmark_time_ms {
-        format!(
-            "Your computer is {} (Benchmark machine time {}ms).",
-            "Slower".red().bold(),
-            benchmark_time_ms
-        )
+    let delta: i64 = your_time_ms as i64 - benchmark_time_ms as i64;
+    let delta_str = if delta < 0 {
+        format!("{} faster than the benchmark machine", format!("{}ms", -delta).green()).bold()
+    } else if delta > 0 {
+        format!("{} slower than the benchmark machine", format!("{}ms", delta).red()).bold()
     } else {
-        format!(
-            "Your computer is {} (Benchmark machine time {}ms).",
-            "Same speed as the benchmark machine".yellow().bold(),
-            benchmark_time_ms
-        )
+        format!("the same speed as the benchmark machine").white().bold()
     };
+    let comparison = 
+        format!(
+            "Your computer is {} (Benchmark machine is {}ms).",
+            delta_str,
+            benchmark_time_ms
+        );
+    
 
     println!("{}", comparison);
     println!();
@@ -350,7 +335,7 @@ async fn process_job(job_id: &str, realm_id: u32, first_run: bool) -> Result<()>
     let result_str = format!("Proved in {}ms", your_time_ms);
     let pad_left = (48 - result_str.len()) / 2;
     let pad_right = 48 - result_str.len() - pad_left;
-    println!("|{}{}{}|", " ".repeat(pad_left), format!("Proved in {}", format!("{}ms", your_time_ms).bright_magenta()), " ".repeat(pad_right));
+    println!("|{}{}{}|", " ".repeat(pad_left), format!("Proved in {}", format!("{}ms", your_time_ms).bright_green()), " ".repeat(pad_right));
     println!("--------------------------------------------------");
     let mut hasher = Sha256::new();
     hasher.update(&proof);
