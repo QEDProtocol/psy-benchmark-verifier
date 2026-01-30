@@ -6,14 +6,14 @@ set INSTALL_DIR=%TEMP%\psy
 set VERSION=
 set PSY_DATA_URL=https://psy-benchmark-round1-data.psy-protocol.xyz
 
-if "%JOB_ID%"=="" (
-    echo [ERROR] JOB_ID environment variable is required (24 bytes hex)
-    exit /b 1
-)
-if "%REALM_ID%"=="" (
-    echo [ERROR] REALM_ID environment variable is required (u32)
-    exit /b 1
-)
+@REM if "%JOB_ID%"=="" (
+@REM     echo [ERROR] JOB_ID environment variable is required (24 bytes hex)
+@REM     exit /b 1
+@REM )
+@REM if "%REALM_ID%"=="" (
+@REM     echo [ERROR] REALM_ID environment variable is required (u32)
+@REM     exit /b 1
+@REM )
 
 :: Trim leading/trailing spaces
 for /f "tokens=*" %%i in ('powershell -c "'%JOB_ID%'.Trim()"') do set "JOB_ID=%%i"
