@@ -11,9 +11,9 @@ use futures::future::join_all;
 use psy_core::job::job_id::ProvingJobCircuitType;
 use sha2::{Digest, Sha256};
 use tokio::time::sleep;
-use psy_prover::prove::{do_generate_proof, fetch_dependency_proof, parse_job_id, parse_proof_id, ParsedJobId, RawInputJson, REALM_ROOT_JOS_MAP};
-use psy_prover::{GenerateProofRequest, PsyProvingJobMetadataWithJobIdJson, PsyWorkerGetProvingWorkAPIResponseJson, PsyWorkerGetProvingWorkWithChildProofsAPIResponseJson};
-use psy_prover::services::APP_STATE;
+use psy_cli::prove::{do_generate_proof, fetch_dependency_proof, parse_job_id, parse_proof_id, ParsedJobId, RawInputJson, REALM_ROOT_JOS_MAP};
+use psy_cli::{GenerateProofRequest, PsyProvingJobMetadataWithJobIdJson, PsyWorkerGetProvingWorkAPIResponseJson, PsyWorkerGetProvingWorkWithChildProofsAPIResponseJson};
+use psy_cli::services::APP_STATE;
 
 const LOGO: &str = r#"
            :*%.

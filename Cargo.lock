@@ -2418,6 +2418,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "psy-cli"
+version = "0.7.1"
+dependencies = [
+ "anyhow",
+ "atty",
+ "axum",
+ "bincode",
+ "clap",
+ "colored",
+ "console",
+ "dotenv",
+ "futures",
+ "hex",
+ "indicatif",
+ "once_cell",
+ "parth_core",
+ "plonky2",
+ "psy_core",
+ "psy_data",
+ "psy_plonky2_basic_helpers",
+ "psy_plonky2_circuits",
+ "psy_worker_core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "psy_api_core"
 version = "0.1.0"
 source = "git+https://github.com/QEDProtocol/parth-generic-v1?rev=0f0cdb333775d8bc650b440f34205ddb56ec84ea#0f0cdb333775d8bc650b440f34205ddb56ec84ea"
@@ -2695,41 +2730,6 @@ dependencies = [
  "strum_macros",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "psy_prover"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "atty",
- "axum",
- "bincode",
- "clap",
- "colored",
- "console",
- "dotenv",
- "futures",
- "hex",
- "indicatif",
- "once_cell",
- "parth_core",
- "plonky2",
- "psy_core",
- "psy_data",
- "psy_plonky2_basic_helpers",
- "psy_plonky2_circuits",
- "psy_worker_core",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

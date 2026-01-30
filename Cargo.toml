@@ -1,15 +1,16 @@
 [package]
-name = "psy_prover"
-version = "0.1.0"
+name = "psy-cli"
+version = "0.7.1"
 edition = "2021"
-rust-version = "1.86"
+description = "Psy CLI Prover"
+authors = ["Psy Protocol"]
 
 [lib]
-name = "psy_prover"
+name = "psy_cli"
 path = "src/lib.rs"
 
 [[bin]]
-name = "psy_prover_cli"
+name = "psy-cli"
 path = "src/main.rs"
 
 [dependencies]
