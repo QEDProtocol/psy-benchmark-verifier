@@ -2,21 +2,26 @@
 setlocal
 
 set REPO=QEDProtocol/psy-benchmark-verifier
-set INSTALL_DIR=%USERPROFILE%\.psy
+set INSTALL_DIR=%TEMP%\psy
 set VERSION=
 set PSY_DATA_URL=https://psy-benchmark-round1-data.psy-protocol.xyz
 
-if "%PROOF_ID%"=="" (
-    echo [ERROR] PROOF_ID environment variable is required
+if "%JOB_ID%"=="" (
+    echo [ERROR] JOB_ID environment variable is required (24 bytes hex)
+    exit /b 1
+)
+if "%REALM_ID%"=="" (
+    echo [ERROR] REALM_ID environment variable is required (u32)
     exit /b 1
 )
 
-:: Trim leading/trailing spaces (use PowerShell as CMD for /f may not work properly)
-for /f "tokens=*" %%i in ('powershell -c "'%PROOF_ID%'.Trim()"') do set "PROOF_ID=%%i"
+:: Trim leading/trailing spaces
+for /f "tokens=*" %%i in ('powershell -c "'%JOB_ID%'.Trim()"') do set "JOB_ID=%%i"
+for /f "tokens=*" %%i in ('powershell -c "'%REALM_ID%'.Trim()"') do set "REALM_ID=%%i"
 
-echo [DEBUG] PROOF_ID=[%PROOF_ID%]
+echo [DEBUG] JOB_ID=[%JOB_ID%] REALM_ID=[%REALM_ID%]
 
-echo [INFO] Installing psy_prover_cli from %REPO%
+echo [INFO] Installing psy-cli (Psy CLI Prover) from %REPO%
 echo [INFO] Platform: windows/amd64
 
 :: Get latest version
@@ -33,17 +38,17 @@ if not exist "%INSTALL_DIR%" (
     mkdir "%INSTALL_DIR%" 2>nul
 )
 
-set FINAL_PATH=%INSTALL_DIR%\psy_prover_cli.exe
+set FINAL_PATH=%INSTALL_DIR%\psy-cli.exe
 
 :: Check if already installed
 if exist "%FINAL_PATH%" (
     echo [INFO] Binary already installed: %FINAL_PATH%
     echo [OK] Done!
-    goto run_fetch_job
+    goto run_prover
 )
 
 :: Download binary
-set ASSET_NAME=psy_prover_cli_windows_x64.exe
+set ASSET_NAME=psy-cli_windows_x64.exe
 set DOWNLOAD_URL=https://github.com/%REPO%/releases/download/%VERSION%/%ASSET_NAME%
 set DOWNLOAD_PATH=%TEMP%\%ASSET_NAME%
 
@@ -76,9 +81,8 @@ del "%DOWNLOAD_PATH%" >nul 2>&1
 echo [OK] Installed: %FINAL_PATH%
 echo [OK] Done!
 
-:run_fetch_job
-set RUN_CMD=%FINAL_PATH% fetch-job -b "%PSY_DATA_URL%" -p "%PROOF_ID%"
-echo [INFO] Running: %RUN_CMD%
-%RUN_CMD%
+:run_prover
+echo [INFO] Running: %FINAL_PATH% -b (stdin: realm_id,job_id)
+(echo %REALM_ID%,%JOB_ID%) | %FINAL_PATH% -b
 
 endlocal

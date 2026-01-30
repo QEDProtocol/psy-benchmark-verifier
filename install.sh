@@ -2,7 +2,7 @@
 set -e
 
 REPO="QEDProtocol/psy-benchmark-verifier"
-INSTALL_DIR="$HOME/.psy"
+INSTALL_DIR="${TMPDIR:-/tmp}/psy"
 VERSION=""
 PSY_DATA_URL="https://psy-benchmark-round1-data.psy-protocol.xyz"
 
@@ -83,11 +83,22 @@ get_latest_version() {
     echo "$version"
 }
 
+show_help() {
+    echo "Usage: install.sh [OPTIONS]"
+    echo "Install Psy CLI Prover (psy-cli). Requires JOB_ID and REALM_ID env vars to run."
+    echo ""
+    echo "Options:"
+    echo "  -v, --version VERSION  Use specific release version (default: latest)"
+    echo "  -d, --dir DIR         Install directory (default: \$TMPDIR/psy or /tmp/psy)"
+    echo "  -l, --list            List available binary assets and exit"
+    echo "  -h, --help            Show this help"
+}
+
 list_assets() {
     info "Available binaries:"
-    echo "  psy_prover_cli_macos_arm64"
-    echo "  psy_prover_cli_ubuntu22.04_amd64"
-    echo "  psy_prover_cli_windows_x64"
+    echo "  psy-cli_macos_arm64"
+    echo "  psy-cli_ubuntu22.04_amd64"
+    echo "  psy-cli_windows_x64"
 }
 
 try_download_asset() {
@@ -119,7 +130,7 @@ try_download_asset() {
         *) error "Unsupported OS: $os" ;;
     esac
 
-    asset_name="psy_prover_cli_${asset_suffix}"
+    asset_name="psy-cli_${asset_suffix}"
     url="https://github.com/$REPO/releases/download/$ver/$asset_name"
     output="$tmp_dir/$asset_name"
 
@@ -145,30 +156,8 @@ find_binary() {
     :
 }
 
-show_help() {
-    cat << 'EOF'
-Usage: PROOF_ID=xxx install.sh [options]
-
-Options:
-  -v, --version VER    Install specific version (default: latest)
-  -d, --dir DIR        Install directory (default: ~/.psy)
-  -l, --list           List available binaries
-  -h, --help           Show this help
-
-Supported platforms:
-  - macOS ARM64 (apple silicon)
-  - Ubuntu 22.04 AMD64
-  - Windows x64
-
-Examples:
-  PROOF_ID=888 curl -fsSL https://.../install.sh | sh
-  PROOF_ID=888 ./install.sh
-  PROOF_ID=888 ./install.sh -v v1.0.0
-EOF
-}
-
 main() {
-    info "Installing psy_prover_cli from $REPO"
+    info "Installing psy-cli (Psy CLI Prover) from $REPO"
 
     OS=$(detect_os)
     ARCH=$(detect_arch)
@@ -179,7 +168,7 @@ main() {
 
     [ ! -d "$INSTALL_DIR" ] && { info "Creating: $INSTALL_DIR"; mkdir -p "$INSTALL_DIR"; }
 
-    FINAL_PATH="$INSTALL_DIR/psy_prover_cli"
+    FINAL_PATH="$INSTALL_DIR/psy-cli"
 
     # Check if already installed with same version
     if [ -f "$FINAL_PATH" ]; then
@@ -214,7 +203,8 @@ main() {
     success "Done!"
 }
 
-PROOF_ID="${PROOF_ID:-}"
+JOB_ID="${JOB_ID:-}"
+REALM_ID="${REALM_ID:-}"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -228,8 +218,9 @@ done
 
 main
 
-[ -z "$PROOF_ID" ] && error "PROOF_ID environment variable is required"
+[ -z "$JOB_ID" ] && error "JOB_ID environment variable is required (24 bytes hex)"
+[ -z "$REALM_ID" ] && error "REALM_ID environment variable is required (u32)"
 
-info "Running: $INSTALL_DIR/psy_prover_cli fetch-job -b \"$PSY_DATA_URL\" -p \"$PROOF_ID\""
+info "Running: $INSTALL_DIR/psy-cli -b (stdin: realm_id,job_id)"
 
-exec "$INSTALL_DIR/psy_prover_cli" fetch-job -b "$PSY_DATA_URL" -p "$PROOF_ID"
+printf '%s,%s\n' "$REALM_ID" "$JOB_ID" | "$INSTALL_DIR/psy-cli" -b

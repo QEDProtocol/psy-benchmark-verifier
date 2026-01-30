@@ -128,8 +128,8 @@ impl AppState {
 
         // tracing::info!("Generate proof took: {:?}", now.elapsed());
         // tracing::info!("Proof generation successfully");
-        println!("{} Proof generated!", job_id.circuit_type);
-        println!("Elapsed time:{:?}", proving_time);
+        // println!("{} Proof generated!", job_id.circuit_type);
+        // println!("Elapsed time:{:?}", proving_time);
 
         {
             let proof_time_ms = proving_time.as_millis() as u64;
@@ -259,8 +259,8 @@ impl AppState {
 
         if verify_result.is_ok() {
             // tracing::info!("Proof verification took: {:?}", now.elapsed());
-            println!("{} Proof verified!", job_id.circuit_type);
-            println!("Elapsed time:{:?}", now.elapsed());
+            // println!("{} Proof verified!", job_id.circuit_type);
+            // println!("Elapsed time:{:?}", now.elapsed());
             return Ok(());
         }
 
