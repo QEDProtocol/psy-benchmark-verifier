@@ -148,7 +148,7 @@ cargo run --release -- server --listen-addr 0.0.0.0 --port 4000
 or run the binary directly:
 
 ```bash
-./target/release/psy_prover_cli server --listen-addr 0.0.0.0 --port 4000
+./target/release/psy-cli server --listen-addr 0.0.0.0 --port 4000
 ```
 
 **Server Options:**

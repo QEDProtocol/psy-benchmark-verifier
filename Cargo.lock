@@ -2419,7 +2419,7 @@ dependencies = [
 
 [[package]]
 name = "psy-cli"
-version = "0.7.1"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "atty",

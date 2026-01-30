@@ -1,6 +1,6 @@
 [package]
 name = "psy-cli"
-version = "0.7.1"
+version = "0.0.4"
 edition = "2021"
 description = "Psy CLI Prover"
 authors = ["Psy Protocol"]
