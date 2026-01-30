@@ -221,6 +221,6 @@ main
 [ -z "$JOB_ID" ] && error "JOB_ID environment variable is required (24 bytes hex)"
 [ -z "$REALM_ID" ] && error "REALM_ID environment variable is required (u32)"
 
-info "Running: $INSTALL_DIR/psy-cli --job-id \"$JOB_ID\" --realm-id \"$REALM_ID\""
+info "Running: $INSTALL_DIR/psy-cli -b (stdin: realm_id,job_id)"
 
-exec "$INSTALL_DIR/psy-cli" --job-id "$JOB_ID" --realm-id "$REALM_ID"
+printf '%s,%s\n' "$REALM_ID" "$JOB_ID" | "$INSTALL_DIR/psy-cli" -b

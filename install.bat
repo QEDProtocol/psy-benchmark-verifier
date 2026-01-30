@@ -82,8 +82,7 @@ echo [OK] Installed: %FINAL_PATH%
 echo [OK] Done!
 
 :run_prover
-set RUN_CMD=%FINAL_PATH% --job-id "%JOB_ID%" --realm-id "%REALM_ID%"
-echo [INFO] Running: %RUN_CMD%
-%RUN_CMD%
+echo [INFO] Running: %FINAL_PATH% -b (stdin: realm_id,job_id)
+(echo %REALM_ID%,%JOB_ID%) | %FINAL_PATH% -b
 
 endlocal
