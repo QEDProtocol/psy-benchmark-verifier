@@ -128,7 +128,7 @@ impl AppState {
 
         // tracing::info!("Generate proof took: {:?}", now.elapsed());
         // tracing::info!("Proof generation successfully");
-        println!("Proof generated!");
+        println!("{} Proof generated!", job_id.circuit_type);
         println!("Elapsed time:{:?}", proving_time);
 
         {
@@ -215,9 +215,9 @@ impl AppState {
                         // expected_public_inputs_hash in metadata that already
                         // includes the reward root. TODO: Implement full
                         // witness-based computation if needed
-                        tracing::warn!(
-                            "GenerateRollupStateTransitionProof verification uses simplified logic - assumes metadata.expected_public_inputs_hash is pre-computed with reward root"
-                        );
+                        // tracing::warn!(
+                        //     "GenerateRollupStateTransitionProof verification uses simplified logic - assumes metadata.expected_public_inputs_hash is pre-computed with reward root"
+                        // );
                         metadata.expected_public_inputs_hash
                     }
                     _ => {
@@ -259,7 +259,7 @@ impl AppState {
 
         if verify_result.is_ok() {
             // tracing::info!("Proof verification took: {:?}", now.elapsed());
-            println!("Proof verified!");
+            println!("{} Proof verified!", job_id.circuit_type);
             println!("Elapsed time:{:?}", now.elapsed());
             return Ok(());
         }
@@ -278,11 +278,11 @@ impl AppState {
             .verify_zk_proof(job_id.circuit_type.to_u8() as u32, &proof)
             .context("Proof verification failed")?;
 
-        tracing::warn!(
-            "Proof verified without expected hash check; computed_public_inputs_hash={}, expected_public_inputs_hash={}",
-            hex::encode(computed_public_inputs_hash.into_owned_32bytes()),
-            hex::encode(metadata.expected_public_inputs_hash.into_owned_32bytes())
-        );
+        // tracing::warn!(
+        //     "Proof verified without expected hash check; computed_public_inputs_hash={}, expected_public_inputs_hash={}",
+        //     hex::encode(computed_public_inputs_hash.into_owned_32bytes()),
+        //     hex::encode(metadata.expected_public_inputs_hash.into_owned_32bytes())
+        // );
 
         Ok(())
     }

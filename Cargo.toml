@@ -16,12 +16,12 @@ path = "src/main.rs"
 
 [dependencies]
 # Dependencies from parth-generic-v1 workspace
-psy_core = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "22fc36fbd03743c89c3083d576722a2e0e3b4bc5" }
-psy_data = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "22fc36fbd03743c89c3083d576722a2e0e3b4bc5" }
-psy_worker_core = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "22fc36fbd03743c89c3083d576722a2e0e3b4bc5" }
-psy_plonky2_circuits = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "22fc36fbd03743c89c3083d576722a2e0e3b4bc5" }
-psy_plonky2_basic_helpers = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "22fc36fbd03743c89c3083d576722a2e0e3b4bc5" }
-parth_core = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "22fc36fbd03743c89c3083d576722a2e0e3b4bc5" }
+psy_core = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "0f0cdb333775d8bc650b440f34205ddb56ec84ea" }
+psy_data = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "0f0cdb333775d8bc650b440f34205ddb56ec84ea" }
+psy_worker_core = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "0f0cdb333775d8bc650b440f34205ddb56ec84ea" }
+psy_plonky2_circuits = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "0f0cdb333775d8bc650b440f34205ddb56ec84ea" }
+psy_plonky2_basic_helpers = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "0f0cdb333775d8bc650b440f34205ddb56ec84ea" }
+parth_core = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "0f0cdb333775d8bc650b440f34205ddb56ec84ea" }
 
 # Web framework
 axum = { version = "0.8.8", features = ["ws"] }
