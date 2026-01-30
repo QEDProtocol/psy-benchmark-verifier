@@ -145,26 +145,45 @@ fn green_psi() -> String {
 struct Spinner {
     running: Arc<AtomicBool>,
     handle: Option<tokio::task::JoinHandle<()>>,
+    num_lines: usize,
 }
 
 impl Spinner {
-    fn new(message: String) -> Self {
+    /// Create a spinner with multiple lines
+    fn new(lines: Vec<String>) -> Self {
         let running = Arc::new(AtomicBool::new(true));
         let running_clone = running.clone();
+        let num_lines = lines.len();
 
         let handle = tokio::spawn(async move {
             let mut frame: usize = 0;
             let term = Term::stdout();
+            let mut first_print = true;
 
             while running_clone.load(Ordering::Relaxed) {
                 let spinner_char = SPINNER_CHARS[frame % SPINNER_CHARS.len()];
                 let psi = rainbow_psi(frame);
 
-                // Clear line and print
-                let _ = term.clear_line();
-                print!("\r{} {} {}", spinner_char.to_string().cyan(), psi, message);
-                let _ = io::stdout().flush();
+                // Move cursor up to overwrite previous output (except on first print)
+                if !first_print {
+                    for _ in 0..lines.len() {
+                        let _ = term.move_cursor_up(1);
+                        let _ = term.clear_line();
+                    }
+                }
 
+                // Print first line with spinner
+                if let Some(first) = lines.first() {
+                    println!("{} {} {}", spinner_char.to_string().cyan(), psi, first);
+                }
+
+                // Print remaining lines with padding to align with first line
+                for line in lines.iter().skip(1) {
+                    println!("     {}", line);
+                }
+
+                let _ = io::stdout().flush();
+                first_print = false;
                 frame += 1;
                 sleep(Duration::from_millis(50)).await;
             }
@@ -173,18 +192,44 @@ impl Spinner {
         Self {
             running,
             handle: Some(handle),
+            num_lines,
         }
     }
 
-    async fn finish(mut self, message: &str) {
+    /// Create a spinner with a single line
+    fn single(message: impl Into<String>) -> Self {
+        Self::new(vec![message.into()])
+    }
+
+    /// Finish with multiple lines
+    async fn finish(mut self, lines: Vec<String>) {
         self.running.store(false, Ordering::Relaxed);
         if let Some(handle) = self.handle.take() {
             let _ = handle.await;
         }
 
         let term = Term::stdout();
-        let _ = term.clear_line();
-        println!("\r{} {} {}", "✓".green(), green_psi(), message);
+
+        // Clear previous spinner lines
+        for _ in 0..self.num_lines {
+            let _ = term.move_cursor_up(1);
+            let _ = term.clear_line();
+        }
+
+        // Print first line with checkmark
+        if let Some(first) = lines.first() {
+            println!("{} {} {}", "✓".green(), green_psi(), first);
+        }
+
+        // Print remaining lines with padding
+        for line in lines.iter().skip(1) {
+            println!("     {}", line);
+        }
+    }
+
+    /// Finish with a single line
+    async fn finish_single(self, message: impl Into<String>) {
+        self.finish(vec![message.into()]).await;
     }
 }
 
@@ -204,70 +249,57 @@ fn print_logo() {
 }
 
 async fn initialize_circuits() -> Result<()> {
-    let spinner = Spinner::new("Initializing Circuits (one time run, this may take a few seconds)...".to_string());
+    let spinner = Spinner::new(vec!["Initializing Circuits...".to_string(), "(one time run, this may take a few seconds)".to_string()]);
 
-    // Simulate initialization
-    // sleep(Duration::from_millis(1500)).await;
     let _ = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
 
-    spinner.finish("Initializing Circuits (one time run, this may take a few seconds)...").await;
+    spinner.finish_single("Initialized Circuits").await;
     Ok(())
 }
 
 const BASE_URL: &str = "https://psy-benchmark-round1-data.psy-protocol.xyz";
 
 async fn receive_proving_request(job_id: &str, realm_id: u32,) -> Result<RawInputJson> {
-    let msg = format!(
-        "Received Proving Request for JobId {}",
-        job_id.cyan()
-    );
-    let spinner = Spinner::new(msg.clone());
+    let spinner = Spinner::new(vec![
+        "Receiving Proving Request".to_string(),
+        format!("JobId: {}", job_id.cyan()),
+    ]);
     let ret = fetch_job(BASE_URL.to_string(), realm_id, job_id.to_string()).await?;
-    spinner.finish(&format!("Received Proving Request for JobId {}", job_id.cyan())).await;
+    spinner.finish(vec![
+        "Received Proving Request".to_string(),
+        format!("JobId: {}", job_id.cyan()),
+    ]).await;
     Ok(ret)
 }
 
-async fn retrieve_witness(raw_input: RawInputJson,job_id: &str, realm_id: u32) -> Result<GenerateProofRequest> {
-    let spinner = Spinner::new("Retrieving Witness from Benchmark Server...".to_string());
+async fn retrieve_witness(raw_input: RawInputJson, job_id: &str, realm_id: u32) -> Result<GenerateProofRequest> {
+    let spinner = Spinner::single("Retrieving Witness from Benchmark Server...");
 
-    // Simulate witness retrieval
-    // sleep(Duration::from_millis(800)).await;
     let witness = fetch_dependency_proofs(raw_input, BASE_URL, job_id.to_string(), realm_id).await?;
 
-
-    spinner.finish("Retrieving Witness from Benchmark Server...").await;
+    spinner.finish_single("Retrieved Witness from Benchmark Server").await;
     Ok(witness)
 }
 
-async fn prove_job(req: GenerateProofRequest,job_id: &str, circuit_type: &str) -> Result<(Vec<u8>,Duration)> {
-    let msg = format!(
-        "Proving JobID {} (Circuit type: {})",
-        job_id.cyan(),
-        circuit_type.green()
-    );
-    let spinner = Spinner::new(msg.clone());
+async fn prove_job(req: GenerateProofRequest, job_id: &str, circuit_type: &str) -> Result<(Vec<u8>, Duration)> {
+    let spinner = Spinner::new(vec![
+        format!("Proving JobID {}", job_id.cyan()),
+        format!("Circuit type: {}", circuit_type.green()),
+    ]);
 
     let start = Instant::now();
-
-    // Simulate proving (random time between 300-700ms)
-    // let prove_time = 300 + (std::time::SystemTime::now()
-    //     .duration_since(std::time::UNIX_EPOCH)
-    //     .unwrap()
-    //     .subsec_millis() % 400);
-    // sleep(Duration::from_millis(prove_time as u64)).await;
 
     let ret = do_generate_proof(req, None, None)
         .context("Failed to generate proof")?;
 
     let elapsed = start.elapsed();
 
-    spinner.finish(&format!(
-        "Proving JobID {} (Circuit type: {})",
-        job_id.cyan(),
-        circuit_type.green()
-    )).await;
+    spinner.finish(vec![
+        format!("Proved JobID {}", job_id.cyan()),
+        format!("Circuit type: {}", circuit_type.green()),
+    ]).await;
 
-    Ok((hex::decode(&ret.proof)?,elapsed))
+    Ok((hex::decode(&ret.proof)?, elapsed))
 }
 
 async fn fetch_benchmark_time(job_id: &str, mut realm_id: u32) -> Result<u64> {
@@ -279,7 +311,7 @@ async fn fetch_benchmark_time(job_id: &str, mut realm_id: u32) -> Result<u64> {
         job_id, realm_id
     );
 
-    let spinner = Spinner::new("Fetching benchmark machine proving time...".to_string());
+    let spinner = Spinner::single("Fetching benchmark machine proving time...");
 
     let client = reqwest::Client::new();
     let response = client
@@ -294,42 +326,38 @@ async fn fetch_benchmark_time(job_id: &str, mut realm_id: u32) -> Result<u64> {
         .await
         .context("Failed to parse benchmark response")?;
 
-    spinner.finish("Fetched benchmark machine proving time").await;
+    spinner.finish_single("Fetched benchmark machine proving time").await;
 
     Ok(benchmark.spend_time)
 }
 
 fn print_results(your_time_ms: u64, benchmark_time_ms: u64) {
 
-    let benchmark_color = if your_time_ms < benchmark_time_ms {
-        format!("{}ms", benchmark_time_ms).green()
-    } else if your_time_ms > benchmark_time_ms {
-        format!("{}ms", benchmark_time_ms).red()
+    let benchmark_color = if your_time_ms > benchmark_time_ms {
+        format!("{}ms", benchmark_time_ms).green().bold()
+    } else if your_time_ms < benchmark_time_ms {
+        format!("{}ms", benchmark_time_ms).yellow().bold()
     } else {
-        format!("{}ms", benchmark_time_ms).yellow()
+        format!("{}ms", benchmark_time_ms).yellow().bold()
     };
 
     println!("Benchmark machine proving time: {}", benchmark_color);
 
-    let comparison = if your_time_ms < benchmark_time_ms {
-        format!(
-            "Your computer is {} (Benchmark machine time {}ms).",
-            "Faster".green().bold(),
-            benchmark_time_ms
-        )
-    } else if your_time_ms > benchmark_time_ms {
-        format!(
-            "Your computer is {} (Benchmark machine time {}ms).",
-            "Slower".red().bold(),
-            benchmark_time_ms
-        )
+    let delta: i64 = your_time_ms as i64 - benchmark_time_ms as i64;
+    let delta_str = if delta < 0 {
+        format!("{} faster than the benchmark machine", format!("{}ms", -delta).green()).bold()
+    } else if delta > 0 {
+        format!("{} slower than the benchmark machine", format!("{}ms", delta).red()).bold()
     } else {
-        format!(
-            "Your computer is {} (Benchmark machine time {}ms).",
-            "Same speed as the benchmark machine".yellow().bold(),
-            benchmark_time_ms
-        )
+        format!("the same speed as the benchmark machine").white().bold()
     };
+    let comparison = 
+        format!(
+            "Your computer is {} (Benchmark machine is {}ms).",
+            delta_str,
+            benchmark_time_ms
+        );
+    
 
     println!("{}", comparison);
     println!();
@@ -340,17 +368,17 @@ async fn process_job(job_id: &str, realm_id: u32, first_run: bool) -> Result<()>
         initialize_circuits().await?;
     }
 
-    let raw_input = receive_proving_request(job_id,realm_id).await?;
+    let raw_input = receive_proving_request(job_id, realm_id).await?;
     let req = retrieve_witness(raw_input, job_id, realm_id).await?;
     let (job, _, node_type, _, _) = get_metadata(job_id.to_string(), realm_id)?;
     let circuit_type = ProvingJobCircuitType::try_from(job.circuit_type)?;
-    let (proof,prove_duration) = prove_job(req, job_id, format!("{}", circuit_type).as_str()).await?;
+    let (proof, prove_duration) = prove_job(req, job_id, format!("{}", circuit_type).as_str()).await?;
     let your_time_ms = prove_duration.as_millis() as u64;
-    println!("--------------------- RESULT ---------------------");
-    let result_str = format!("Proved in {}ms", your_time_ms);
+    println!("--------------------- {} ---------------------", "RESULT".bright_white().bold());
+    let result_str = format!("Proved in {}ms", your_time_ms).bright_white().bold();
     let pad_left = (48 - result_str.len()) / 2;
     let pad_right = 48 - result_str.len() - pad_left;
-    println!("|{}{}{}|", " ".repeat(pad_left), format!("Proved in {}", format!("{}ms", your_time_ms).bright_magenta()), " ".repeat(pad_right));
+    println!("|{}{}{}|", " ".repeat(pad_left), format!("Proved in {}", format!("{}ms", your_time_ms).bright_green()).bright_white().bold(), " ".repeat(pad_right));
     println!("--------------------------------------------------");
     let mut hasher = Sha256::new();
     hasher.update(&proof);
@@ -476,7 +504,7 @@ pub fn get_proof_id(job_id: String, realm_id: u32) -> Result<String> {
     Ok(proof_id)
 }
 
-fn get_metadata(job_id: String, realm_id: u32) -> Result<(ParsedJobId, u64,u8,String,String)> {
+fn get_metadata(job_id: String, realm_id: u32) -> Result<(ParsedJobId, u64, u8, String, String)> {
     let proof_id = get_proof_id(job_id, realm_id)?;
     // Replace proof_id with realm root proof_id if exists in map
     let proof_id = if let Some(root_proof_id) = REALM_ROOT_JOS_MAP.get(&proof_id) {
@@ -545,7 +573,7 @@ async fn fetch_dependency_proofs(
     base_url: &str,
     job_id: String,
     realm_id: u32,
-) -> Result<GenerateProofRequest>{
+) -> Result<GenerateProofRequest> {
     let (job, realm_id, node_type, job_id, proof_id) = get_metadata(job_id, realm_id)?;
     tracing::debug!("Job: {:?}", job);
     if job.circuit_type == 6 {
