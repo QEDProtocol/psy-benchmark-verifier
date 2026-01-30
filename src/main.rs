@@ -1,288 +1,480 @@
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    time::Instant,
-};
-
-use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use anyhow::{bail, Context, Result};
+use clap::Parser;
+use colored::*;
+use console::Term;
+use serde::Deserialize;
+use std::io::{self, BufRead, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 use futures::future::join_all;
-use once_cell::sync::Lazy;
-use parth_core::{pgoldilocks::QHashOut, protocol::core_types::Q256BitHash};
-use plonky2::field::goldilocks_field::GoldilocksField;
-use psy_prover::{
-    config::{run, Config},
-    handler::parse_hex_hash,
-    models::{
-        GenerateProofRequest, GenerateProofResponse, PsyProvingJobMetadataJson, PsyProvingJobMetadataWithJobIdJson,
-        PsyWorkerGetProvingWorkAPIResponseJson, PsyWorkerGetProvingWorkWithChildProofsAPIResponseJson, VerifyProofRequest, VerifyProofResponse,
-    },
-    services::{derive_worker_reward_tag_from_job_id, APP_STATE},
-    AppState,
-};
-use serde::{Deserialize, Serialize};
-use serde_json;
-use tracing_subscriber::{self, EnvFilter};
+use psy_core::job::job_id::ProvingJobCircuitType;
+use sha2::{Digest, Sha256};
+use tokio::time::sleep;
+use psy_prover::prove::{do_generate_proof, fetch_dependency_proof, parse_job_id, parse_proof_id, ParsedJobId, RawInputJson, REALM_ROOT_JOS_MAP};
+use psy_prover::{GenerateProofRequest, PsyProvingJobMetadataWithJobIdJson, PsyWorkerGetProvingWorkAPIResponseJson, PsyWorkerGetProvingWorkWithChildProofsAPIResponseJson};
+use psy_prover::services::APP_STATE;
 
-static REALM_ROOT_JOS_MAP: Lazy<HashMap<String, String>> = Lazy::new(|| {
-    let content = include_str!("../realm_root_jos_map.json");
-    serde_json::from_str::<HashMap<String, String>>(content).expect("Failed to parse realm_root_jos_map.json")
-});
+const LOGO: &str = r#"
+           :*%.
+          =@@@                     -@@@@@@@%*=:
+          :@@@                     -@@@@@@@@@@@@=
+           @@%                     -@@@      =@@@%
+:+%@@@.    @@*    +@@=             -@@@       -@@@-
+  =@@@:    @@=   .@@@%             -@@@       :@@@=  .*@@@@@@#. #@@*        @@@=
+   @@@:    %@-    -@@@.            -@@@       -@@@- :@@@%-:=@@. :@@@:      *@@*
+  .@@@.    %@:    .%@@.            -@@@      =@@@%  %@@-         =@@%     :@@@:
+  :@@@.    #@:    :%@%             -@@@@@@@@@@@@:   -@@@%         *@@*    #@@=
+  .@@@:    %@:    =@@.             -@@@%%%%#**:      :%@@@@@=.     %@@-  =@@#
+   *@@@    %@:   :@@.              -@@@                  =@@@@*    :@@@:.@@%
+    *@@@*: @@: -%@%.               -@@@                    :@@@.    +@@#%@@-
+      =@@@@@@@@@*                  -@@@             %*     -@@@      #@@@@*
+          .@@=                     -@@@             @@@@@@@@@%.       %@@@
+          :@@*                                         :==-.          @@@:
+          +@@%                                                       %@@=
+          @@@%                                                      *@@#
+                                                                   -@@@:
+                                                                   %@@=
+"#;
 
-/// Psy Validator CLI - Zero Knowledge Proof Generation and Verification
-#[derive(Parser, Debug)]
-#[command(
-    name = "psy-validator",
-    version,
-    about = "CLI tool and HTTP server for ZK proof generation and verification",
-    long_about = None
-)]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
+const SPINNER_CHARS: &[char] = &['⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷'];
 
-    /// Log level (e.g. info, debug, trace)
-    #[arg(long = "log-level", default_value = "info")]
-    log_level: String,
+/// Convert HSV to RGB
+/// h: 0.0-360.0 (hue in degrees)
+/// s: 0.0-1.0 (saturation)
+/// v: 0.0-1.0 (value/brightness)
+fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (u8, u8, u8) {
+    let c = v * s;
+    let h_prime = h / 60.0;
+    let x = c * (1.0 - ((h_prime % 2.0) - 1.0).abs());
+    let m = v - c;
+
+    let (r1, g1, b1) = if h_prime < 1.0 {
+        (c, x, 0.0)
+    } else if h_prime < 2.0 {
+        (x, c, 0.0)
+    } else if h_prime < 3.0 {
+        (0.0, c, x)
+    } else if h_prime < 4.0 {
+        (0.0, x, c)
+    } else if h_prime < 5.0 {
+        (x, 0.0, c)
+    } else {
+        (c, 0.0, x)
+    };
+
+    (
+        ((r1 + m) * 255.0) as u8,
+        ((g1 + m) * 255.0) as u8,
+        ((b1 + m) * 255.0) as u8,
+    )
 }
 
-#[derive(Subcommand, Debug)]
-enum Commands {
-    /// Run http server
-    Server {
-        /// Listen address (e.g. 0.0.0.0)
-        #[arg(long = "listen-addr", default_value = "0.0.0.0")]
-        listen_addr: String,
-
-        /// Listening port
-        #[arg(long, default_value_t = 4000)]
-        port: u16,
-    },
-    /// Generate zero-knowledge proof
-    GenerateProof {
-        /// Input JSON file path
-        #[arg(short, long)]
-        input: PathBuf,
-
-        /// Output file path (default: stdout)
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-
-        /// Worker reward tag (hex string, optional)
-        #[arg(long)]
-        worker_reward_tag: Option<String>,
-
-        /// Reward tree value (hex string, optional)
-        #[arg(long)]
-        reward_tree_value: Option<String>,
-    },
-
-    /// Verify zero-knowledge proof
-    VerifyProof {
-        /// Input JSON file path
-        #[arg(short, long)]
-        input: PathBuf,
-
-        /// Proof file path (hex string or JSON with proof field)
-        #[arg(short, long)]
-        proof: PathBuf,
-
-        /// Worker reward tag (hex string, optional)
-        #[arg(long)]
-        worker_reward_tag: Option<String>,
-
-        /// Reward tree value (hex string, optional)
-        #[arg(long)]
-        reward_tree_value: Option<String>,
-    },
-
-    /// Fetch job and dependencies proofs in one click workflow
-    FetchJob {
-        /// Base URL (format: https://xxx)
-        #[arg(short, long)]
-        base_url: String,
-        /// Proof ID (format: job_id_hex + realm_id_hex, where job_id_hex is 48
-        /// chars and realm_id < 1000)
-        #[arg(short, long)]
-        proof_id: String,
-        /// Output directory
-        #[arg(short, long, default_value = ".")]
-        output_dir: Option<PathBuf>,
-        /// One click done
-        #[arg(short, long, default_value = "true")]
-        one_click_done: bool,
-    },
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
-
-    tracing_subscriber::fmt().with_env_filter(EnvFilter::new(&cli.log_level)).init();
-
-    match cli.command {
-        Commands::Server { listen_addr, port } => {
-            let mut config = Config::from_env();
-            config.server.host = listen_addr.clone();
-            config.server.port = port;
-
-            tracing::info!("Starting psy validator server at {}:{}", listen_addr, port);
-
-            run(config).await
+/// Check if terminal likely supports true color (24-bit)
+fn supports_truecolor() -> bool {
+    if let Ok(colorterm) = std::env::var("COLORTERM") {
+        if colorterm == "truecolor" || colorterm == "24bit" {
+            return true;
         }
-        Commands::GenerateProof {
-            input,
-            output,
-            worker_reward_tag,
-            reward_tree_value,
-        } => handle_generate_proof(input, output, worker_reward_tag, reward_tree_value),
-        Commands::VerifyProof {
-            input,
-            proof,
-            worker_reward_tag,
-            reward_tree_value,
-        } => handle_verify_proof(input, proof, worker_reward_tag, reward_tree_value),
-        Commands::FetchJob {
-            base_url,
-            proof_id,
-            output_dir,
-            one_click_done,
-        } => fetch_job(base_url, proof_id, output_dir, one_click_done).await,
-    }?;
-    let app_state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
-    app_state.print_metrics();
-    Ok(())
+    }
+    if let Ok(term) = std::env::var("TERM") {
+        if term.contains("256color") || term.contains("truecolor") {
+            return true;
+        }
+    }
+    // Default to true for modern terminals
+    true
 }
 
-/// Fetch raw_proof.json for a single dependency
-/// Returns Some(proof_hex) on success, None on failure (warning already logged)
-async fn fetch_dependency_proof(
-    client: &reqwest::Client,
-    base_url: &str,
-    realm_id: u64,
-    node_type: u8,
-    job: &ParsedJobId,
-    dep_job_id: &str,
-    _output_dir: &Path,
-) -> Result<Option<String>> {
-    // Format: {base_url}/output/{realm_id}/{dep_job_id}/raw_proof.json
-    let raw_proof_url = format!("{}/output/{}/{}/raw_proof.json", base_url, realm_id, dep_job_id);
-    tracing::debug!("Fetching raw_proof.json for dependency {} from: {}", dep_job_id, raw_proof_url);
+#[derive(Parser, Debug)]
+#[command(name = "psy-cli")]
+#[command(version = "0.7.1 BETA")]
+#[command(about = "Psy CLI Prover")]
+struct Args {
+    /// Job ID (24 bytes hex) - can also be set via JOB_ID env var
+    #[arg(long, env = "JOB_ID")]
+    job_id: Option<String>,
 
-    let mut proof_response = client
-        .get(&raw_proof_url)
-        .send()
-        .await
-        .with_context(|| format!("Failed to send HTTP request for raw_proof.json of dependency {}", dep_job_id))?;
+    /// Realm ID (u32) - can also be set via REALM_ID env var
+    #[arg(long, env = "REALM_ID")]
+    realm_id: Option<u32>,
 
-    if !proof_response.status().is_success() {
-        let status = proof_response.status();
-        tracing::warn!(
-            "Failed to fetch raw_proof.json for dependency {} from {}: HTTP {} {}",
-            dep_job_id,
-            raw_proof_url,
-            status.as_u16(),
-            status.canonical_reason().unwrap_or("Unknown")
-        );
+    /// Batch mode: read realm_id,job_id pairs from stdin
+    #[arg(long, short)]
+    batch: bool,
+}
 
-        // Retry with dep_realm_id for node_type == 2
-        if node_type == 2 {
-            let dep_realm_id = job.task_index;
-            let retry_url = format!("{}/output/{}/{}/raw_proof.json", base_url, dep_realm_id, dep_job_id);
-            tracing::debug!(
-                "Retrying fetch for dependency {} with realm_id {} (node_type=2) from: {}",
-                dep_job_id,
-                dep_realm_id,
-                retry_url
-            );
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BenchmarkResponse {
+    job_id: String,
+    realm_id: String,
+    spend_time: u64,
+}
 
-            proof_response = client.get(&retry_url).send().await.with_context(|| {
-                format!(
-                    "Failed to send HTTP request for raw_proof.json of dependency {} (retry with realm_id {})",
-                    dep_job_id, dep_realm_id
-                )
-            })?;
+fn rainbow_psi(frame: usize) -> String {
+    // Cycle through full hue spectrum (0-360 degrees)
+    // Each frame advances by 8 degrees for a smooth gradient
+    // Full rainbow cycle takes 45 frames (~3.6 seconds at 80ms per frame)
+    let hue = ((frame * 8) % 360) as f32;
 
-            if !proof_response.status().is_success() {
-                let retry_status = proof_response.status();
-                tracing::warn!(
-                    "Failed to fetch raw_proof.json for dependency {} after retry from {}: HTTP {} {}",
-                    dep_job_id,
-                    retry_url,
-                    retry_status.as_u16(),
-                    retry_status.canonical_reason().unwrap_or("Unknown")
-                );
-                return Ok(None);
+    if supports_truecolor() {
+        // True color: smooth gradient through all hues
+        // Full saturation and brightness for vivid colors
+        let (r, g, b) = hsv_to_rgb(hue, 1.0, 1.0);
+        "𝛙".truecolor(r, g, b).to_string()
+    } else {
+        // Fallback for basic terminals: cycle through available bright colors
+        let color_index = (frame % 6) as usize;
+        let colored_psi = match color_index {
+            0 => "𝛙".bright_red(),
+            1 => "𝛙".bright_yellow(),
+            2 => "𝛙".bright_green(),
+            3 => "𝛙".bright_cyan(),
+            4 => "𝛙".bright_blue(),
+            _ => "𝛙".bright_magenta(),
+        };
+        colored_psi.to_string()
+    }
+}
+
+fn green_psi() -> String {
+    "𝛙".green().to_string()
+}
+
+struct Spinner {
+    running: Arc<AtomicBool>,
+    handle: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl Spinner {
+    fn new(message: String) -> Self {
+        let running = Arc::new(AtomicBool::new(true));
+        let running_clone = running.clone();
+
+        let handle = tokio::spawn(async move {
+            let mut frame: usize = 0;
+            let term = Term::stdout();
+
+            while running_clone.load(Ordering::Relaxed) {
+                let spinner_char = SPINNER_CHARS[frame % SPINNER_CHARS.len()];
+                let psi = rainbow_psi(frame);
+
+                // Clear line and print
+                let _ = term.clear_line();
+                print!("\r{} {} {}", spinner_char.to_string().cyan(), psi, message);
+                let _ = io::stdout().flush();
+
+                frame += 1;
+                sleep(Duration::from_millis(50)).await;
             }
-            tracing::debug!("Successfully fetched proof for dependency {} after retry", dep_job_id);
-        } else {
-            tracing::debug!("Skipping retry for dependency {} (node_type={}, not 2)", dep_job_id, node_type);
-            return Ok(None);
+        });
+
+        Self {
+            running,
+            handle: Some(handle),
         }
     }
 
-    // Get response text to handle both formats
-    let proof_text = proof_response
-        .text()
-        .await
-        .with_context(|| format!("Failed to read response text for dependency {}", dep_job_id))?;
-    let proof_text_trimmed = proof_text.trim();
+    async fn finish(mut self, message: &str) {
+        self.running.store(false, Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.await;
+        }
 
-    // Try to parse as JSON object first (format 1: structured JSON)
-    let proof_hex = if let Ok(raw_proof) = serde_json::from_str::<RawProofJson>(proof_text_trimmed) {
-        // Format 1: JSON object with proof field
-        tracing::debug!(
-            "Parsed raw_proof.json as JSON object for dependency {} (proof length: {} chars)",
-            dep_job_id,
-            raw_proof.proof.len()
-        );
-
-        // Save raw_proof.json for this dependency (optional, for debugging) - commented out
-        // let dep_proof_path = output_dir.join(format!("raw_proof_{}.json", dep_job_id));
-        // let raw_proof_json =
-        //     serde_json::to_string_pretty(&raw_proof).with_context(|| format!("Failed to serialize raw_proof.json for dependency {}", dep_job_id))?;
-        // std::fs::write(&dep_proof_path, &raw_proof_json)
-        //     .with_context(|| format!("Failed to write {} for dependency {}", dep_proof_path.display(), dep_job_id))?;
-        // tracing::debug!("Saved raw_proof.json for dependency {} to {}", dep_job_id, dep_proof_path.display());
-
-        raw_proof.proof
-    } else {
-        // Format 2: Plain hex string (may be quoted JSON string or raw hex)
-        tracing::debug!(
-            "Parsed raw_proof.json as plain hex string for dependency {} (text length: {} chars)",
-            dep_job_id,
-            proof_text_trimmed.len()
-        );
-
-        let hex_string = if proof_text_trimmed.starts_with('"') && proof_text_trimmed.ends_with('"') {
-            // Remove JSON string quotes
-            serde_json::from_str::<String>(proof_text_trimmed).unwrap_or_else(|_| proof_text_trimmed.trim_matches('"').to_string())
-        } else {
-            proof_text_trimmed.to_string()
-        };
-
-        // Save raw_proof.json for this dependency (save as plain hex string) - commented out
-        // let dep_proof_path = output_dir.join(format!("raw_proof_{}.json", dep_job_id));
-        // std::fs::write(&dep_proof_path, &hex_string)
-        //     .with_context(|| format!("Failed to write {} for dependency {}", dep_proof_path.display(), dep_job_id))?;
-        // tracing::debug!(
-        //     "Saved raw_proof.json for dependency {} to {} (plain hex format, length: {} chars)",
-        //     dep_job_id,
-        //     dep_proof_path.display(),
-        //     hex_string.len()
-        // );
-
-        hex_string
-    };
-
-    Ok(Some(proof_hex))
+        let term = Term::stdout();
+        let _ = term.clear_line();
+        println!("\r{} {} {}", "✓".green(), green_psi(), message);
+    }
 }
 
-async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBuf>, one_click_done: bool) -> Result<()> {
-    let start_time = Instant::now();
-    tracing::debug!("Fetching job with base_url: {}, proof_id: {}", base_url, proof_id);
-    tracing::debug!("One-click done: {}", one_click_done);
+fn print_logo() {
+    println!("{}", LOGO.bright_white());
+    println!(
+        " {} Psy CLI Prover: Version 0.7.1 BETA {}",
+        "===".bright_white(),
+        "===".bright_white()
+    );
+    println!(
+        " {} 𝕏: @PsyProtocol | https://psy.xyz  {}",
+        "===".bright_white(),
+        "===".bright_white()
+    );
+    println!();
+}
 
+async fn initialize_circuits() -> Result<()> {
+    let spinner = Spinner::new("Initializing Circuits (one time run, this may take a few seconds)...".to_string());
+
+    // Simulate initialization
+    // sleep(Duration::from_millis(1500)).await;
+    let _ = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
+
+    spinner.finish("Initializing Circuits (one time run, this may take a few seconds)...").await;
+    Ok(())
+}
+
+const BASE_URL: &str = "https://psy-benchmark-round1-data.psy-protocol.xyz";
+
+async fn receive_proving_request(job_id: &str, realm_id: u32,) -> Result<RawInputJson> {
+    let msg = format!(
+        "Received Proving Request for JobId {}",
+        job_id.cyan()
+    );
+    let spinner = Spinner::new(msg.clone());
+    let ret = fetch_job(BASE_URL.to_string(), realm_id, job_id.to_string()).await?;
+    spinner.finish(&format!("Received Proving Request for JobId {}", job_id.cyan())).await;
+    Ok(ret)
+}
+
+async fn retrieve_witness(raw_input: RawInputJson,job_id: &str, realm_id: u32) -> Result<GenerateProofRequest> {
+    let spinner = Spinner::new("Retrieving Witness from Benchmark Server...".to_string());
+
+    // Simulate witness retrieval
+    // sleep(Duration::from_millis(800)).await;
+    let witness = fetch_dependency_proofs(raw_input, BASE_URL, job_id.to_string(), realm_id).await?;
+
+
+    spinner.finish("Retrieving Witness from Benchmark Server...").await;
+    Ok(witness)
+}
+
+async fn prove_job(req: GenerateProofRequest,job_id: &str, circuit_type: &str) -> Result<(Vec<u8>,Duration)> {
+    let msg = format!(
+        "Proving JobID {} (Circuit type: {})",
+        job_id.cyan(),
+        circuit_type.green()
+    );
+    let spinner = Spinner::new(msg.clone());
+
+    let start = Instant::now();
+
+    // Simulate proving (random time between 300-700ms)
+    // let prove_time = 300 + (std::time::SystemTime::now()
+    //     .duration_since(std::time::UNIX_EPOCH)
+    //     .unwrap()
+    //     .subsec_millis() % 400);
+    // sleep(Duration::from_millis(prove_time as u64)).await;
+
+    let ret = do_generate_proof(req, None, None)
+        .context("Failed to generate proof")?;
+
+    let elapsed = start.elapsed();
+
+    spinner.finish(&format!(
+        "Proving JobID {} (Circuit type: {})",
+        job_id.cyan(),
+        circuit_type.green()
+    )).await;
+
+    Ok((hex::decode(&ret.proof)?,elapsed))
+}
+
+async fn fetch_benchmark_time(job_id: &str, realm_id: u32) -> Result<u64> {
+    let url = format!(
+        "https://psy-block-visualizer-counter.team-81c.workers.dev/spend-time?job_id={}&realm_id={}",
+        job_id, realm_id
+    );
+
+    let spinner = Spinner::new("Fetching benchmark machine proving time...".to_string());
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+        .context("Failed to fetch benchmark time")?;
+
+    let benchmark: BenchmarkResponse = response
+        .json()
+        .await
+        .context("Failed to parse benchmark response")?;
+
+    spinner.finish("Fetched benchmark machine proving time").await;
+
+    Ok(benchmark.spend_time)
+}
+
+fn print_results(your_time_ms: u64, benchmark_time_ms: u64) {
+
+    let benchmark_color = if your_time_ms < benchmark_time_ms {
+        format!("{}ms", benchmark_time_ms).green()
+    } else if your_time_ms > benchmark_time_ms {
+        format!("{}ms", benchmark_time_ms).red()
+    } else {
+        format!("{}ms", benchmark_time_ms).yellow()
+    };
+
+    println!("Benchmark machine proving time: {}", benchmark_color);
+
+    let comparison = if your_time_ms < benchmark_time_ms {
+        format!(
+            "Your computer is {} (Benchmark machine time {}ms).",
+            "Faster".green().bold(),
+            benchmark_time_ms
+        )
+    } else if your_time_ms > benchmark_time_ms {
+        format!(
+            "Your computer is {} (Benchmark machine time {}ms).",
+            "Slower".red().bold(),
+            benchmark_time_ms
+        )
+    } else {
+        format!(
+            "Your computer is {} (Benchmark machine time {}ms).",
+            "Same speed as the benchmark machine".yellow().bold(),
+            benchmark_time_ms
+        )
+    };
+
+    println!("{}", comparison);
+    println!();
+}
+
+async fn process_job(job_id: &str, realm_id: u32, first_run: bool) -> Result<()> {
+    if first_run {
+        initialize_circuits().await?;
+    }
+
+    let raw_input = receive_proving_request(job_id,realm_id).await?;
+    let req = retrieve_witness(raw_input, job_id, realm_id).await?;
+    let (job, _, node_type, _, _) = get_metadata(job_id.to_string(), realm_id)?;
+    let circuit_type = ProvingJobCircuitType::try_from(job.circuit_type)?;
+    let (proof,prove_duration) = prove_job(req, job_id, format!("{}", circuit_type).as_str()).await?;
+    let your_time_ms = prove_duration.as_millis() as u64;
+    println!("--------------------- RESULT ---------------------");
+    let result_str = format!("Proved in {}ms", your_time_ms);
+    let pad_left = (48 - result_str.len()) / 2;
+    let pad_right = 48 - result_str.len() - pad_left;
+    println!("|{}{}{}|", " ".repeat(pad_left), format!("Proved in {}", format!("{}ms", your_time_ms).bright_magenta()), " ".repeat(pad_right));
+    println!("--------------------------------------------------");
+    let mut hasher = Sha256::new();
+    hasher.update(&proof);
+    let hash_result: [u8; 32] = hasher.finalize().into();
+    let hash_str = hex::encode(hash_result);
+    println!("Proof SHA256: {}", hash_str.bright_yellow());
+
+    let benchmark_time_ms = match fetch_benchmark_time(job_id, realm_id).await {
+        Ok(time) => time,
+        Err(e) => {
+            eprintln!("{} Failed to fetch benchmark time: {}", "⚠".yellow(), e);
+            // Use a default benchmark time if fetch fails
+            1337
+        }
+    };
+
+    print_results(your_time_ms, benchmark_time_ms);
+
+    Ok(())
+}
+
+async fn run_batch_mode() -> Result<()> {
+    print_logo();
+
+    let stdin = io::stdin();
+    let lines: Vec<String> = stdin.lock().lines().filter_map(|l| l.ok()).collect();
+
+    if lines.is_empty() {
+        eprintln!("{} No input provided. Expected format: realm_id,job_id", "Error:".red());
+        return Ok(());
+    }
+
+    let mut first_run = true;
+
+    for (i, line) in lines.iter().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split(',').collect();
+        if parts.len() != 2 {
+            eprintln!(
+                "{} Invalid format on line {}: '{}'. Expected: realm_id,job_id",
+                "Warning:".yellow(),
+                i + 1,
+                line
+            );
+            continue;
+        }
+
+        let realm_id: u32 = match parts[0].trim().parse() {
+            Ok(id) => id,
+            Err(_) => {
+                eprintln!(
+                    "{} Invalid realm_id on line {}: '{}'",
+                    "Warning:".yellow(),
+                    i + 1,
+                    parts[0]
+                );
+                continue;
+            }
+        };
+
+        let job_id = parts[1].trim();
+
+        println!(
+            "{} Processing job {}/{}",
+            ">>>".cyan(),
+            i + 1,
+            lines.len()
+        );
+
+        if let Err(e) = process_job(job_id, realm_id, first_run).await {
+            eprintln!("{} Error processing job: {}", "Error:".red(), e);
+        }
+
+        first_run = false;
+    }
+
+    println!("{} Batch processing complete!", "✓".green());
+
+    Ok(())
+}
+
+async fn run_single_mode(job_id: String, realm_id: u32) -> Result<()> {
+    print_logo();
+    process_job(&job_id, realm_id, true).await
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let args = Args::parse();
+
+    if args.batch || !atty::is(atty::Stream::Stdin) {
+        // Batch mode - read from stdin
+        run_batch_mode().await
+    } else {
+        // Single mode - use env vars or args
+        let job_id = args
+            .job_id
+            .ok_or_else(|| anyhow::anyhow!("JOB_ID is required. Set via --job-id or JOB_ID env var"))?;
+
+        let realm_id = args
+            .realm_id
+            .ok_or_else(|| anyhow::anyhow!("REALM_ID is required. Set via --realm-id or REALM_ID env var"))?;
+
+        run_single_mode(job_id, realm_id).await
+    }
+}
+
+pub fn get_proof_id(job_id: String, realm_id: u32) -> Result<String> {
+    // realm_id must occupy 2 bytes (4 hex chars), so format as 4 hex digits (zero-padded)
+    // job_id must be exactly 48 hex characters (24 bytes)
+    let job_id = job_id.trim_start_matches("0x");
+    if job_id.len() != 48 {
+        anyhow::bail!("job_id must be 48 hex characters (24 bytes), got {}", job_id.len());
+    }
+    if realm_id > 0xFFFF {
+        anyhow::bail!("realm_id too large to fit in 2 bytes: {}", realm_id);
+    }
+    let proof_id = format!("{}{:04x}", job_id, realm_id);
+    Ok(proof_id)
+}
+
+fn get_metadata(job_id: String, realm_id: u32) -> Result<(ParsedJobId, u64,u8,String,String)> {
+    let proof_id = get_proof_id(job_id, realm_id)?;
     // Replace proof_id with realm root proof_id if exists in map
     let proof_id = if let Some(root_proof_id) = REALM_ROOT_JOS_MAP.get(&proof_id) {
         tracing::debug!("Realm root job found, replacing proof_id: {} -> {}", proof_id, root_proof_id);
@@ -305,23 +497,21 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
     tracing::debug!("Realm ID (parsed from proof_id): {}", realm_id);
     tracing::debug!("Job ID (parsed from proof_id): {}", job_id);
     tracing::debug!("Node type (calculated): {}", node_type);
-    tracing::debug!("Base URL: {}", base_url);
 
-    // Determine output directory and create realm_id subdirectory
-    let base_output_dir = output_dir.unwrap_or_else(|| PathBuf::from("."));
-    let output_dir = base_output_dir.join(realm_id.to_string());
-    // std::fs::create_dir_all(&output_dir).with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
-    tracing::debug!("Output directory: {}", output_dir.display());
 
     let job = parse_job_id(&hex::decode(&job_id).context("Failed to decode job ID")?);
     if job.is_none() {
         anyhow::bail!("Invalid job ID: {}", job_id);
     }
     let job = job.unwrap();
+    Ok((job, realm_id, node_type, job_id, proof_id))
+}
+
+async fn fetch_job(base_url: String, realm_id: u32, job_id: String) -> Result<RawInputJson> {
+    let (job, realm_id, node_type, job_id, proof_id) = get_metadata(job_id, realm_id)?;
     tracing::debug!("Job: {:?}", job);
     if job.circuit_type == 6 {
-        tracing::debug!("Job is a user end cap job");
-        return Ok(());
+        bail!("User end cap jobs are not supported");
     }
 
     // Construct raw_input_url from base_url, realm_id, and job_id
@@ -343,19 +533,30 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
 
     let raw_input: RawInputJson = response.json().await.context("Failed to parse raw_input.json response")?;
 
-    // Save raw_input.json with job_id in filename - commented out
-    // let raw_input_path = output_dir.join(format!("raw_input_{}.json", job_id));
-    // let raw_input_json = serde_json::to_string_pretty(&raw_input).context("Failed to serialize raw_input.json")?;
-    // std::fs::write(&raw_input_path, &raw_input_json).with_context(|| format!("Failed to write raw_input.json: {}", raw_input_path.display()))?;
-    // tracing::debug!("Saved raw_input.json to: {}", raw_input_path.display());
+    Ok(raw_input)
+}
 
+
+async fn fetch_dependency_proofs(
+    raw_input: RawInputJson,
+    base_url: &str,
+    job_id: String,
+    realm_id: u32,
+) -> Result<GenerateProofRequest>{
+    let (job, realm_id, node_type, job_id, proof_id) = get_metadata(job_id, realm_id)?;
+    tracing::debug!("Job: {:?}", job);
+    if job.circuit_type == 6 {
+        bail!("User end cap jobs are not supported");
+    }
+
+    let client = reqwest::Client::new();
     // Fetch raw_proof.json for each dependency in parallel
     tracing::debug!("Fetching {} dependencies in parallel", raw_input.metadata.dependencies.len());
     let fetch_tasks: Vec<_> = raw_input
         .metadata
         .dependencies
         .iter()
-        .map(|dep_job_id| fetch_dependency_proof(&client, &base_url, realm_id, node_type, &job, dep_job_id, &output_dir))
+        .map(|dep_job_id| fetch_dependency_proof(&client, &base_url, realm_id, node_type, &job, dep_job_id))
         .collect();
 
     let results = join_all(fetch_tasks).await;
@@ -392,8 +593,7 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
             raw_input.metadata.dependencies.len(),
             missing_dependencies.join(", ")
         );
-        tracing::debug!("Job fetch completed in: {:?}", start_time.elapsed());
-        return Ok(());
+        anyhow::bail!("Skipping input generation: missing dependency proofs");
     }
 
     tracing::debug!("Successfully fetched all {} dependency proofs", input_proofs.len());
@@ -432,315 +632,5 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
         reward_tree_value: None, // Will be computed automatically if not provided
     };
 
-    // Save input.json with job_id in filename - commented out
-    let _input_path = output_dir.join(format!("input_{}.json", job_id));
-
-    let elapsed = start_time.elapsed();
-    tracing::debug!("Job fetch completed in: {:?}", elapsed);
-
-    // One-click workflow: generate_proof -> verify_proof (in-memory, no file I/O)
-    if one_click_done {
-        tracing::debug!("Starting one-click workflow: generate_proof -> verify_proof (in-memory)");
-
-        // Step 1: Generate proof from in-memory input_json
-        tracing::debug!("Step 1/2: Generating proof...");
-        let gen_response = do_generate_proof(input_json.clone(), None, None)
-            .context("Failed to generate proof in one-click workflow")?;
-        tracing::debug!("Proof generated successfully");
-
-        // Step 2: Verify proof using in-memory input and proof response
-        tracing::debug!("Step 2/2: Verifying proof...");
-        let verify_request = VerifyProofRequest {
-            input: input_json.input.clone(),
-            proof: gen_response.proof.clone(),
-            worker_reward_tag: Some(gen_response.worker_reward_tag.clone()),
-            reward_tree_value: Some(gen_response.reward_tree_value.clone()),
-        };
-        let verify_response = do_verify_proof(&verify_request).context("Failed to verify proof in one-click workflow")?;
-        if !verify_response.valid {
-            anyhow::bail!("One-click verify failed: {:?}", verify_response.message);
-        }
-        tracing::debug!("One-click workflow completed successfully!");
-    }
-
-    Ok(())
-}
-
-/// Generate proof from in-memory request. No file I/O.
-fn do_generate_proof(
-    mut request: GenerateProofRequest,
-    worker_reward_tag_override: Option<String>,
-    reward_tree_value_override: Option<String>,
-) -> Result<GenerateProofResponse> {
-    if let Some(tag) = worker_reward_tag_override {
-        request.worker_reward_tag = Some(tag);
-    }
-    if let Some(rtv) = reward_tree_value_override {
-        request.reward_tree_value = Some(rtv);
-    }
-
-    println!("Initializing circuit library...");
-    let state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
-
-    let input = request.input.to_internal().context("Failed to convert input to internal format")?;
-    let job_id = input.base.job.job_id.clone();
-
-    let worker_reward_tag = match request.worker_reward_tag.as_deref() {
-        Some(tag_hex) => {
-            let tag = parse_hex_hash(tag_hex).map_err(|e| anyhow::anyhow!("Invalid worker_reward_tag: {}", e))?;
-            Some(tag)
-        }
-        None => None,
-    };
-
-    let reward_tree_value = request
-        .reward_tree_value
-        .as_deref()
-        .map(|hex| parse_hex_hash(hex).map_err(|e| anyhow::anyhow!("Invalid reward_tree_value: {}", e)))
-        .transpose()?;
-
-    tracing::debug!("Generating proof...");
-    let (proof_bytes, computed_reward_tree_value) = state
-        .generate_proof(input, worker_reward_tag, reward_tree_value)
-        .context("Proof generation failed")?;
-
-    let final_worker_reward_tag: QHashOut<GoldilocksField> = if let Some(tag) = worker_reward_tag {
-        tag
-    } else {
-        derive_worker_reward_tag_from_job_id(job_id).context("Failed to derive worker_reward_tag")?
-    };
-
-    let reward_tree_value_bytes: [u8; 32] = computed_reward_tree_value.into_owned_32bytes();
-
-    Ok(GenerateProofResponse {
-        proof: hex::encode(&proof_bytes),
-        worker_reward_tag: hex::encode(final_worker_reward_tag.into_owned_32bytes()),
-        reward_tree_value: hex::encode(reward_tree_value_bytes),
-    })
-}
-
-fn handle_generate_proof(
-    input_path: PathBuf,
-    output_path: Option<PathBuf>,
-    worker_reward_tag: Option<String>,
-    reward_tree_value: Option<String>,
-) -> Result<()> {
-    tracing::debug!("Reading input from: {}", input_path.display());
-    let input_content = std::fs::read_to_string(&input_path).with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
-    let request: GenerateProofRequest =
-        serde_json::from_str(&input_content).with_context(|| format!("Failed to parse input JSON: {}", input_path.display()))?;
-
-    let response = do_generate_proof(request, worker_reward_tag, reward_tree_value)?;
-    let output_json = serde_json::to_string_pretty(&response).context("Failed to serialize response to JSON")?;
-    if output_path.is_some() {
-        println!("{}", output_json);
-    } else {
-        println!("{}", output_json);
-    }
-    Ok(())
-}
-
-/// Verify proof from in-memory request (request.proof and optional tags must be set). No file I/O.
-fn do_verify_proof(request: &VerifyProofRequest) -> Result<VerifyProofResponse> {
-    println!("Initializing circuit library...");
-    let state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
-
-    let input = request.input.to_internal().context("Failed to convert input to internal format")?;
-    let proof_bytes = hex::decode(&request.proof).context("Failed to decode proof hex string")?;
-
-    let worker_reward_tag = request
-        .worker_reward_tag
-        .as_deref()
-        .map(|tag_hex| parse_hex_hash(tag_hex).map_err(|e| anyhow::anyhow!("Invalid worker_reward_tag: {}", e)))
-        .transpose()?;
-
-    let reward_tree_value = request
-        .reward_tree_value
-        .as_deref()
-        .map(|hex| parse_hex_hash(hex).map_err(|e| anyhow::anyhow!("Invalid reward_tree_value: {}", e)))
-        .transpose()?;
-
-    tracing::debug!("Verifying proof...");
-    let verify_result = state.verify_proof(input, &proof_bytes, worker_reward_tag, reward_tree_value);
-
-    Ok(match verify_result {
-        Ok(()) => VerifyProofResponse {
-            valid: true,
-            message: Some("Proof is valid".to_string()),
-        },
-        Err(e) => {
-            tracing::warn!("Proof verification failed: {}", e);
-            VerifyProofResponse {
-                valid: false,
-                message: Some(format!("Verification failed: {}", e)),
-            }
-        }
-    })
-}
-
-fn handle_verify_proof(input_path: PathBuf, proof_path: PathBuf, worker_reward_tag: Option<String>, reward_tree_value: Option<String>) -> Result<()> {
-    tracing::debug!("Reading input from: {}", input_path.display());
-    tracing::debug!("Reading proof from: {}", proof_path.display());
-
-    let input_content = std::fs::read_to_string(&input_path).with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
-
-    let mut request: VerifyProofRequest = if let Ok(verify_req) = serde_json::from_str::<VerifyProofRequest>(&input_content) {
-        verify_req
-    } else if let Ok(generate_req) = serde_json::from_str::<GenerateProofRequest>(&input_content) {
-        VerifyProofRequest {
-            input: generate_req.input,
-            proof: String::new(),
-            worker_reward_tag: generate_req.worker_reward_tag,
-            reward_tree_value: generate_req.reward_tree_value,
-        }
-    } else {
-        anyhow::bail!(
-            "Failed to parse input JSON: {}. Expected VerifyProofRequest or GenerateProofRequest format",
-            input_path.display()
-        );
-    };
-
-    let proof_content = std::fs::read_to_string(&proof_path).with_context(|| format!("Failed to read proof file: {}", proof_path.display()))?;
-    let (proof_hex, proof_reward_tree_value) = parse_proof_file(&proof_content)?;
-
-    if let Some(tag) = worker_reward_tag {
-        request.worker_reward_tag = Some(tag);
-    }
-    if let Some(rtv) = reward_tree_value {
-        request.reward_tree_value = Some(rtv);
-    } else if let Some(rtv) = proof_reward_tree_value {
-        request.reward_tree_value = Some(rtv);
-    }
-    request.proof = proof_hex;
-
-    let response = do_verify_proof(&request)?;
-    let output_json = serde_json::to_string_pretty(&response).context("Failed to serialize response to JSON")?;
-    tracing::debug!("output result: {}", output_json);
-    if !response.valid {
-        std::process::exit(1);
-    }
-    Ok(())
-}
-
-/// Parse proof file - supports both JSON format and plain hex string
-fn parse_proof_file(content: &str) -> Result<(String, Option<String>)> {
-    let trimmed = content.trim();
-
-    // Try to parse as JSON first
-    if let Ok(proof_json) = serde_json::from_str::<serde_json::Value>(trimmed) {
-        if let Some(obj) = proof_json.as_object() {
-            if let Some(proof) = obj.get("proof").and_then(|v| v.as_str()) {
-                let reward_tree_value = obj.get("reward_tree_value").and_then(|v| v.as_str()).map(|s| s.to_string());
-                return Ok((proof.to_string(), reward_tree_value));
-            }
-        }
-    }
-
-    // Fallback: treat as plain hex string (may be quoted JSON string)
-    let proof_hex = if trimmed.starts_with('"') && trimmed.ends_with('"') {
-        serde_json::from_str::<String>(trimmed).unwrap_or_else(|_| trimmed.trim_matches('"').to_string())
-    } else {
-        trimmed.to_string()
-    };
-
-    Ok((proof_hex, None))
-}
-
-/// Parse proof_id into job_id_hex and realm_id
-/// proof_id format: job_id_hex (48 chars) + realm_id_hex (variable length,
-/// realm_id < 1000) Returns (job_id_hex, realm_id)
-fn parse_proof_id(proof_id: &str) -> Result<(String, u64)> {
-    const JOB_ID_HEX_LEN: usize = 48; // 24 bytes = 48 hex chars
-
-    if proof_id.len() < JOB_ID_HEX_LEN {
-        anyhow::bail!(
-            "proof_id too short: expected at least {} characters, got {}",
-            JOB_ID_HEX_LEN,
-            proof_id.len()
-        );
-    }
-    // Extract job_id_hex from the beginning (48 chars)
-    let job_id_hex = proof_id[..JOB_ID_HEX_LEN].to_string();
-
-    // Extract realm_id_hex from the remaining part
-    let realm_id_hex = &proof_id[JOB_ID_HEX_LEN..];
-
-    if realm_id_hex.is_empty() {
-        anyhow::bail!("realm_id_hex is empty in proof_id");
-    }
-
-    // Parse realm_id_hex to u64
-    let realm_id = u64::from_str_radix(realm_id_hex, 16).with_context(|| format!("Failed to parse realm_id_hex '{}' as u64", realm_id_hex))?;
-
-    // Validate realm_id < 1000
-    if realm_id >= 1000 {
-        anyhow::bail!("realm_id must be < 1000, got {} (from hex: {})", realm_id, realm_id_hex);
-    }
-
-    Ok((job_id_hex, realm_id))
-}
-
-fn parse_job_id(bytes: &[u8]) -> Option<ParsedJobId> {
-    if bytes.len() != 24 {
-        return None;
-    }
-
-    let topic = bytes[0];
-    let goal_id = u64::from_le_bytes(bytes[1..9].try_into().ok()?);
-    let circuit_type = bytes[9];
-    let group_id = u32::from_le_bytes(bytes[10..14].try_into().ok()?);
-    let sub_group_id = u32::from_le_bytes(bytes[14..18].try_into().ok()?);
-    let task_index = u32::from_le_bytes(bytes[18..22].try_into().ok()?);
-    let data_type = bytes[22];
-    let data_index = bytes[23];
-
-    Some(ParsedJobId {
-        job_id_hex: hex::encode(bytes),
-        topic,
-        goal_id,
-        circuit_type,
-        group_id,
-        sub_group_id,
-        task_index,
-        data_type,
-        data_index,
-    })
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ParsedJobId {
-    pub job_id_hex: String,
-    pub topic: u8,
-    pub goal_id: u64,
-    pub circuit_type: u8,
-    pub group_id: u32,
-    pub sub_group_id: u32,
-    pub task_index: u32,
-    pub data_type: u8,
-    pub data_index: u8,
-}
-
-/// raw_input.json structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RawInputJson {
-    pub job_id: String,
-    pub metadata: PsyProvingJobMetadataJson,
-    pub child_proof_tag_values: Vec<String>,
-    pub witness: String,
-    pub realm_id: u64,
-    pub realm_sub_id: u64,
-    pub unique_pending_id: u64,
-}
-
-/// raw_proof.json structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RawProofJson {
-    pub job_id: String,
-    pub metadata: PsyProvingJobMetadataJson,
-    pub tag: String,
-    pub child_proof_tag_values: Vec<String>,
-    pub proof: String,
-    pub realm_id: u64,
-    pub realm_sub_id: u64,
-    pub unique_pending_id: u64,
+    Ok(input_json)
 }

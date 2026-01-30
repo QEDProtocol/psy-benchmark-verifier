@@ -1,5 +1,3 @@
-[workspace]
-
 [package]
 name = "psy_prover"
 version = "0.1.0"
@@ -15,6 +13,11 @@ name = "psy_prover_cli"
 path = "src/main.rs"
 
 [dependencies]
+indicatif = "0.17"
+console = "0.15"
+colored = "2.1"
+atty = "0.2"
+sha2 = "0.10"
 # Dependencies from parth-generic-v1 workspace
 psy_core = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "0f0cdb333775d8bc650b440f34205ddb56ec84ea" }
 psy_data = { git = "https://github.com/QEDProtocol/parth-generic-v1", rev = "0f0cdb333775d8bc650b440f34205ddb56ec84ea" }
