@@ -69,7 +69,7 @@ pub async fn handle_verify_proof(
     State(state): State<Arc<AppState>>,
     Json(request): Json<VerifyProofRequest>,
 ) -> Result<Json<VerifyProofResponse>, ApiError> {
-    tracing::info!("Received verify_proof request");
+    tracing::debug!("Received verify_proof request");
 
     let input = request
         .input
@@ -92,7 +92,7 @@ pub async fn handle_verify_proof(
 
     match state.verify_proof(input, &proof_bytes, worker_reward_tag, reward_tree_value) {
         Ok(()) => {
-            tracing::info!("Proof verification successful");
+            tracing::debug!("Proof verification successful");
             Ok(Json(VerifyProofResponse {
                 valid: true,
                 message: Some("Proof is valid".to_string()),

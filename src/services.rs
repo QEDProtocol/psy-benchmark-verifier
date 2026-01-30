@@ -98,7 +98,7 @@ impl AppState {
                 .context("Failed to compute reward tree value")?
         };
 
-        tracing::info!(
+        tracing::debug!(
             "Generating proof for job_id: {:?}, circuit_type: {:?}, node_type: {}",
             job_id,
             job_id.circuit_type,
@@ -126,8 +126,10 @@ impl AppState {
 
         let proving_time = now.elapsed();
 
-        tracing::info!("Proof generation successful, size: {} bytes", proof.len());
-        tracing::info!("Generate proof took: {:?}", now.elapsed());
+        // tracing::info!("Generate proof took: {:?}", now.elapsed());
+        // tracing::info!("Proof generation successfully");
+        println!("Proof generated!");
+        println!("Elapsed time:{:?}", proving_time);
 
         {
             let proof_time_ms = proving_time.as_millis() as u64;
@@ -162,7 +164,7 @@ impl AppState {
         let metadata = &input.base.job.metadata;
         let node_type = input.base.node_type;
 
-        tracing::info!(
+        tracing::debug!(
             "Verifying proof for job_id: {:?}, circuit_type: {:?}, node_type: {}",
             job_id,
             job_id.circuit_type,
@@ -256,8 +258,9 @@ impl AppState {
         }
 
         if verify_result.is_ok() {
-            tracing::info!("Proof verification took: {:?}", now.elapsed());
-            tracing::info!("Proof verification successful");
+            // tracing::info!("Proof verification took: {:?}", now.elapsed());
+            println!("Proof verified!");
+            println!("Elapsed time:{:?}", now.elapsed());
             return Ok(());
         }
 
@@ -291,13 +294,13 @@ impl AppState {
             .read()
             .map_err(|e| anyhow::anyhow!("Failed to lock metrics for reading: {}", e))?;
         if metrics.is_empty() {
-            tracing::info!("No metrics collected");
+            tracing::debug!("No metrics collected");
             return Ok(());
         }
 
-        tracing::info!("=== Metrics Summary ===");
+        tracing::debug!("=== Metrics Summary ===");
         for (i, m) in metrics.iter().enumerate() {
-            tracing::info!("[{}] {:?} - time: {}ms, circuit: {:?}", i, m.action_type, m.time_ms, m.circuit_type);
+            tracing::debug!("[{}] {:?} - time: {}ms, circuit: {:?}", i, m.action_type, m.time_ms, m.circuit_type);
         }
 
         Ok(())

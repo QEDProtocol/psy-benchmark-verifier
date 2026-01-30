@@ -167,7 +167,7 @@ async fn fetch_dependency_proof(
 ) -> Result<Option<String>> {
     // Format: {base_url}/output/{realm_id}/{dep_job_id}/raw_proof.json
     let raw_proof_url = format!("{}/output/{}/{}/raw_proof.json", base_url, realm_id, dep_job_id);
-    tracing::info!("Fetching raw_proof.json for dependency {} from: {}", dep_job_id, raw_proof_url);
+    tracing::debug!("Fetching raw_proof.json for dependency {} from: {}", dep_job_id, raw_proof_url);
 
     let mut proof_response = client
         .get(&raw_proof_url)
@@ -189,7 +189,7 @@ async fn fetch_dependency_proof(
         if node_type == 2 {
             let dep_realm_id = job.task_index;
             let retry_url = format!("{}/output/{}/{}/raw_proof.json", base_url, dep_realm_id, dep_job_id);
-            tracing::info!(
+            tracing::debug!(
                 "Retrying fetch for dependency {} with realm_id {} (node_type=2) from: {}",
                 dep_job_id,
                 dep_realm_id,
@@ -280,12 +280,12 @@ async fn fetch_dependency_proof(
 
 async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBuf>, one_click_done: bool) -> Result<()> {
     let start_time = Instant::now();
-    tracing::info!("Fetching job with base_url: {}, proof_id: {}", base_url, proof_id);
-    tracing::info!("One-click done: {}", one_click_done);
+    tracing::debug!("Fetching job with base_url: {}, proof_id: {}", base_url, proof_id);
+    tracing::debug!("One-click done: {}", one_click_done);
 
     // Replace proof_id with realm root proof_id if exists in map
     let proof_id = if let Some(root_proof_id) = REALM_ROOT_JOS_MAP.get(&proof_id) {
-        tracing::info!("Realm root job found, replacing proof_id: {} -> {}", proof_id, root_proof_id);
+        tracing::debug!("Realm root job found, replacing proof_id: {} -> {}", proof_id, root_proof_id);
         root_proof_id.clone()
     } else {
         proof_id
@@ -302,32 +302,32 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
     } else {
         2
     };
-    tracing::info!("Realm ID (parsed from proof_id): {}", realm_id);
-    tracing::info!("Job ID (parsed from proof_id): {}", job_id);
-    tracing::info!("Node type (calculated): {}", node_type);
-    tracing::info!("Base URL: {}", base_url);
+    tracing::debug!("Realm ID (parsed from proof_id): {}", realm_id);
+    tracing::debug!("Job ID (parsed from proof_id): {}", job_id);
+    tracing::debug!("Node type (calculated): {}", node_type);
+    tracing::debug!("Base URL: {}", base_url);
 
     // Determine output directory and create realm_id subdirectory
     let base_output_dir = output_dir.unwrap_or_else(|| PathBuf::from("."));
     let output_dir = base_output_dir.join(realm_id.to_string());
     std::fs::create_dir_all(&output_dir).with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
-    tracing::info!("Output directory: {}", output_dir.display());
+    tracing::debug!("Output directory: {}", output_dir.display());
 
     let job = parse_job_id(&hex::decode(&job_id).context("Failed to decode job ID")?);
     if job.is_none() {
         anyhow::bail!("Invalid job ID: {}", job_id);
     }
     let job = job.unwrap();
-    tracing::info!("Job: {:?}", job);
+    tracing::debug!("Job: {:?}", job);
     if job.circuit_type == 6 {
-        tracing::info!("Job is a user end cap job");
+        tracing::debug!("Job is a user end cap job");
         return Ok(());
     }
 
     // Construct raw_input_url from base_url, realm_id, and job_id
     // Format: {base_url}/output/{realm_id}/{job_id}/raw_input.json
     let raw_input_url = format!("{}/output/{}/{}/raw_input.json", base_url, realm_id, job_id);
-    tracing::info!("Fetching raw_input.json from: {}", raw_input_url);
+    tracing::debug!("Fetching raw_input.json from: {}", raw_input_url);
 
     // Fetch raw_input.json
     let client = reqwest::Client::new();
@@ -351,10 +351,10 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
     let raw_input_path = output_dir.join(format!("raw_input_{}.json", job_id));
     let raw_input_json = serde_json::to_string_pretty(&raw_input).context("Failed to serialize raw_input.json")?;
     std::fs::write(&raw_input_path, &raw_input_json).with_context(|| format!("Failed to write raw_input.json: {}", raw_input_path.display()))?;
-    tracing::info!("Saved raw_input.json to: {}", raw_input_path.display());
+    tracing::debug!("Saved raw_input.json to: {}", raw_input_path.display());
 
     // Fetch raw_proof.json for each dependency in parallel
-    tracing::info!("Fetching {} dependencies in parallel", raw_input.metadata.dependencies.len());
+    tracing::debug!("Fetching {} dependencies in parallel", raw_input.metadata.dependencies.len());
     let fetch_tasks: Vec<_> = raw_input
         .metadata
         .dependencies
@@ -396,11 +396,11 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
             raw_input.metadata.dependencies.len(),
             missing_dependencies.join(", ")
         );
-        tracing::info!("Job fetch completed in: {:?}", start_time.elapsed());
+        tracing::debug!("Job fetch completed in: {:?}", start_time.elapsed());
         return Ok(());
     }
 
-    tracing::info!("Successfully fetched all {} dependency proofs", input_proofs.len());
+    tracing::debug!("Successfully fetched all {} dependency proofs", input_proofs.len());
 
     // Verify that we have all required proofs
     if input_proofs.len() != raw_input.metadata.dependencies.len() {
@@ -440,19 +440,19 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
     let input_path = output_dir.join(format!("input_{}.json", job_id));
     let input_json_str = serde_json::to_string_pretty(&input_json).context("Failed to serialize input.json")?;
     std::fs::write(&input_path, &input_json_str).with_context(|| format!("Failed to write input.json: {}", input_path.display()))?;
-    tracing::info!("Saved input.json to: {}", input_path.display());
+    tracing::debug!("Saved input.json to: {}", input_path.display());
 
     let elapsed = start_time.elapsed();
-    tracing::info!("Job fetch completed in: {:?}", elapsed);
+    tracing::debug!("Job fetch completed in: {:?}", elapsed);
 
     // One-click workflow: generate_proof -> verify_proof
     if one_click_done {
-        tracing::info!("Starting one-click workflow: generate_proof -> verify_proof");
+        tracing::debug!("Starting one-click workflow: generate_proof -> verify_proof");
 
         let proof_path = output_dir.join(format!("proof_{}.json", job_id));
 
         // Step 1: Generate proof
-        tracing::info!("Step 1/2: Generating proof...");
+        tracing::debug!("Step 1/2: Generating proof...");
         handle_generate_proof(
             input_path.clone(),
             Some(proof_path.clone()),
@@ -460,18 +460,18 @@ async fn fetch_job(base_url: String, proof_id: String, output_dir: Option<PathBu
             None, // reward_tree_value (will be computed automatically)
         )
         .context("Failed to generate proof in one-click workflow")?;
-        tracing::info!("Proof generated successfully");
+        tracing::debug!("Proof generated successfully");
 
         // Step 2: Verify proof
-        tracing::info!("Step 2/2: Verifying proof...");
+        tracing::debug!("Step 2/2: Verifying proof...");
         handle_verify_proof(
             input_path, proof_path, None, // worker_reward_tag (will be extracted from proof.json if needed)
             None, // reward_tree_value (will be extracted from proof.json)
         )
         .context("Failed to verify proof in one-click workflow")?;
-        tracing::info!("Proof verified successfully");
+        // tracing::info!("Proof verified successfully");
 
-        tracing::info!("One-click workflow completed successfully!");
+        tracing::debug!("One-click workflow completed successfully!");
     }
 
     Ok(())
@@ -483,7 +483,7 @@ fn handle_generate_proof(
     worker_reward_tag: Option<String>,
     reward_tree_value: Option<String>,
 ) -> Result<()> {
-    tracing::info!("Reading input from: {}", input_path.display());
+    tracing::debug!("Reading input from: {}", input_path.display());
 
     // Read input file
     let input_content = std::fs::read_to_string(&input_path).with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
@@ -500,7 +500,7 @@ fn handle_generate_proof(
     }
 
     // Initialize AppState
-    tracing::info!("Initializing circuit library and prover...");
+    println!("Initializing circuit library...");
     let state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
 
     // Convert request to internal format
@@ -554,7 +554,7 @@ fn handle_generate_proof(
 
     if let Some(output) = output_path {
         std::fs::write(&output, output_json).with_context(|| format!("Failed to write output file: {}", output.display()))?;
-        tracing::info!("Proof written to: {}", output.display());
+        tracing::debug!("Proof written to: {}", output.display());
     } else {
         println!("{}", output_json);
     }
@@ -563,8 +563,8 @@ fn handle_generate_proof(
 }
 
 fn handle_verify_proof(input_path: PathBuf, proof_path: PathBuf, worker_reward_tag: Option<String>, reward_tree_value: Option<String>) -> Result<()> {
-    tracing::info!("Reading input from: {}", input_path.display());
-    tracing::info!("Reading proof from: {}", proof_path.display());
+    tracing::debug!("Reading input from: {}", input_path.display());
+    tracing::debug!("Reading proof from: {}", proof_path.display());
 
     // Read input file
     let input_content = std::fs::read_to_string(&input_path).with_context(|| format!("Failed to read input file: {}", input_path.display()))?;
@@ -609,7 +609,7 @@ fn handle_verify_proof(input_path: PathBuf, proof_path: PathBuf, worker_reward_t
     request.proof = proof_hex;
 
     // Initialize AppState
-    tracing::info!("Initializing circuit library and verifier...");
+    println!("Initializing circuit library...");
     let state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
 
     // Convert request to internal format
@@ -632,7 +632,7 @@ fn handle_verify_proof(input_path: PathBuf, proof_path: PathBuf, worker_reward_t
         .transpose()?;
 
     // Verify proof
-    tracing::info!("Verifying proof...");
+    tracing::debug!("Verifying proof...");
     let verify_result = state.verify_proof(input, &proof_bytes, worker_reward_tag, reward_tree_value);
 
     // Create response
@@ -653,7 +653,7 @@ fn handle_verify_proof(input_path: PathBuf, proof_path: PathBuf, worker_reward_t
     // Output result
     let output_json = serde_json::to_string_pretty(&response).context("Failed to serialize response to JSON")?;
 
-    println!("{}", output_json);
+    tracing::debug!("output result： {}", output_json);
 
     // Return error if verification failed
     if !response.valid {
