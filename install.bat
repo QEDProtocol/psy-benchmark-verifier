@@ -6,17 +6,22 @@ set INSTALL_DIR=%USERPROFILE%\.psy
 set VERSION=
 set PSY_DATA_URL=https://psy-benchmark-round1-data.psy-protocol.xyz
 
-if "%PROOF_ID%"=="" (
-    echo [ERROR] PROOF_ID environment variable is required
+if "%JOB_ID%"=="" (
+    echo [ERROR] JOB_ID environment variable is required (24 bytes hex)
+    exit /b 1
+)
+if "%REALM_ID%"=="" (
+    echo [ERROR] REALM_ID environment variable is required (u32)
     exit /b 1
 )
 
-:: Trim leading/trailing spaces (use PowerShell as CMD for /f may not work properly)
-for /f "tokens=*" %%i in ('powershell -c "'%PROOF_ID%'.Trim()"') do set "PROOF_ID=%%i"
+:: Trim leading/trailing spaces
+for /f "tokens=*" %%i in ('powershell -c "'%JOB_ID%'.Trim()"') do set "JOB_ID=%%i"
+for /f "tokens=*" %%i in ('powershell -c "'%REALM_ID%'.Trim()"') do set "REALM_ID=%%i"
 
-echo [DEBUG] PROOF_ID=[%PROOF_ID%]
+echo [DEBUG] JOB_ID=[%JOB_ID%] REALM_ID=[%REALM_ID%]
 
-echo [INFO] Installing psy-cli from %REPO%
+echo [INFO] Installing psy-cli (Psy CLI Prover) from %REPO%
 echo [INFO] Platform: windows/amd64
 
 :: Get latest version
@@ -39,7 +44,7 @@ set FINAL_PATH=%INSTALL_DIR%\psy-cli.exe
 if exist "%FINAL_PATH%" (
     echo [INFO] Binary already installed: %FINAL_PATH%
     echo [OK] Done!
-    goto run_fetch_job
+    goto run_prover
 )
 
 :: Download binary
@@ -76,8 +81,8 @@ del "%DOWNLOAD_PATH%" >nul 2>&1
 echo [OK] Installed: %FINAL_PATH%
 echo [OK] Done!
 
-:run_fetch_job
-set RUN_CMD=%FINAL_PATH% fetch-job -b "%PSY_DATA_URL%" -p "%PROOF_ID%"
+:run_prover
+set RUN_CMD=%FINAL_PATH% --job-id "%JOB_ID%" --realm-id "%REALM_ID%"
 echo [INFO] Running: %RUN_CMD%
 %RUN_CMD%
 

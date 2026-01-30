@@ -83,6 +83,17 @@ get_latest_version() {
     echo "$version"
 }
 
+show_help() {
+    echo "Usage: install.sh [OPTIONS]"
+    echo "Install Psy CLI Prover (psy-cli). Requires JOB_ID and REALM_ID env vars to run."
+    echo ""
+    echo "Options:"
+    echo "  -v, --version VERSION  Use specific release version (default: latest)"
+    echo "  -d, --dir DIR         Install directory (default: \$HOME/.psy)"
+    echo "  -l, --list            List available binary assets and exit"
+    echo "  -h, --help            Show this help"
+}
+
 list_assets() {
     info "Available binaries:"
     echo "  psy-cli_macos_arm64"
@@ -145,30 +156,8 @@ find_binary() {
     :
 }
 
-show_help() {
-    cat << 'EOF'
-Usage: PROOF_ID=xxx install.sh [options]
-
-Options:
-  -v, --version VER    Install specific version (default: latest)
-  -d, --dir DIR        Install directory (default: ~/.psy)
-  -l, --list           List available binaries
-  -h, --help           Show this help
-
-Supported platforms:
-  - macOS ARM64 (apple silicon)
-  - Ubuntu 22.04 AMD64
-  - Windows x64
-
-Examples:
-  PROOF_ID=888 curl -fsSL https://.../install.sh | sh
-  PROOF_ID=888 ./install.sh
-  PROOF_ID=888 ./install.sh -v v1.0.0
-EOF
-}
-
 main() {
-    info "Installing psy-cli from $REPO"
+    info "Installing psy-cli (Psy CLI Prover) from $REPO"
 
     OS=$(detect_os)
     ARCH=$(detect_arch)
@@ -214,7 +203,8 @@ main() {
     success "Done!"
 }
 
-PROOF_ID="${PROOF_ID:-}"
+JOB_ID="${JOB_ID:-}"
+REALM_ID="${REALM_ID:-}"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -228,8 +218,9 @@ done
 
 main
 
-[ -z "$PROOF_ID" ] && error "PROOF_ID environment variable is required"
+[ -z "$JOB_ID" ] && error "JOB_ID environment variable is required (24 bytes hex)"
+[ -z "$REALM_ID" ] && error "REALM_ID environment variable is required (u32)"
 
-info "Running: $INSTALL_DIR/psy-cli fetch-job -b \"$PSY_DATA_URL\" -p \"$PROOF_ID\""
+info "Running: $INSTALL_DIR/psy-cli --job-id \"$JOB_ID\" --realm-id \"$REALM_ID\""
 
-exec "$INSTALL_DIR/psy-cli" fetch-job -b "$PSY_DATA_URL" -p "$PROOF_ID"
+exec "$INSTALL_DIR/psy-cli" --job-id "$JOB_ID" --realm-id "$REALM_ID"
