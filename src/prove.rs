@@ -11,8 +11,6 @@ use once_cell::sync::Lazy;
 use parth_core::{pgoldilocks::QHashOut, protocol::core_types::Q256BitHash};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use crate::{
-    config::{run, Config},
-    handler::parse_hex_hash,
     models::{
         GenerateProofRequest, GenerateProofResponse, PsyProvingJobMetadataJson, PsyProvingJobMetadataWithJobIdJson,
         PsyWorkerGetProvingWorkAPIResponseJson, PsyWorkerGetProvingWorkWithChildProofsAPIResponseJson, VerifyProofRequest, VerifyProofResponse,
@@ -48,16 +46,6 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Run http server
-    Server {
-        /// Listen address (e.g. 0.0.0.0)
-        #[arg(long = "listen-addr", default_value = "0.0.0.0")]
-        listen_addr: String,
-
-        /// Listening port
-        #[arg(long, default_value_t = 4000)]
-        port: u16,
-    },
     /// Generate zero-knowledge proof
     GenerateProof {
         /// Input JSON file path
@@ -121,15 +109,6 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_env_filter(EnvFilter::new(&cli.log_level)).init();
 
     match cli.command {
-        Commands::Server { listen_addr, port } => {
-            let mut config = Config::from_env();
-            config.server.host = listen_addr.clone();
-            config.server.port = port;
-
-            tracing::info!("Starting psy validator server at {}:{}", listen_addr, port);
-
-            run(config).await
-        }
         Commands::GenerateProof {
             input,
             output,
@@ -709,4 +688,14 @@ pub struct RawProofJson {
     pub realm_id: u64,
     pub realm_sub_id: u64,
     pub unique_pending_id: u64,
+}
+
+pub fn parse_hex_hash(hex_str: &str) -> Result<QHashOut<GoldilocksField>, String> {
+    let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
+    if bytes.len() != 32 {
+        return Err(format!("Invalid hash length: {} (expected 32)", bytes.len()));
+    }
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&bytes);
+    Ok(QHashOut::from_owned_32bytes(arr))
 }

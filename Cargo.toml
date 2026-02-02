@@ -14,7 +14,6 @@ name = "psy-cli"
 path = "src/main.rs"
 
 [dependencies]
-indicatif = "0.17"
 console = "0.15"
 colored = "2.1"
 atty = "0.2"
@@ -60,16 +59,11 @@ tracing-subscriber = { version = "0.3.20", features = [
 
 clap = { version = "4.5.53", features = ["derive", "env"] }
 dotenv = "0.15"
-tower-http = { version = "0.6", features = ["full"] }
 
 [lints.rust]
 unsafe_code = "forbid"
 unused = "warn"
 missing_docs = "warn"
-
-[dev-dependencies]
-tower = { version = "0.5", features = ["full"] }
-tempfile = "3.8"
 
 [profile.release]
 debug = false          # Remove debug symbols (was true - major size contributor)
