@@ -10,9 +10,11 @@ use futures::future::join_all;
 use once_cell::sync::Lazy;
 use parth_core::{pgoldilocks::QHashOut, protocol::core_types::Q256BitHash};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use serde::{Deserialize, Serialize};
+use serde_json;
+use tracing_subscriber::{self, EnvFilter};
+
 use crate::{
-    config::{run, Config},
-    handler::parse_hex_hash,
     models::{
         GenerateProofRequest, GenerateProofResponse, PsyProvingJobMetadataJson, PsyProvingJobMetadataWithJobIdJson,
         PsyWorkerGetProvingWorkAPIResponseJson, PsyWorkerGetProvingWorkWithChildProofsAPIResponseJson, VerifyProofRequest, VerifyProofResponse,
@@ -20,139 +22,11 @@ use crate::{
     services::{derive_worker_reward_tag_from_job_id, APP_STATE},
     AppState,
 };
-use serde::{Deserialize, Serialize};
-use serde_json;
-use tracing_subscriber::{self, EnvFilter};
 
 pub static REALM_ROOT_JOS_MAP: Lazy<HashMap<String, String>> = Lazy::new(|| {
     let content = include_str!("../realm_root_jos_map.json");
     serde_json::from_str::<HashMap<String, String>>(content).expect("Failed to parse realm_root_jos_map.json")
 });
-
-/// Psy Validator CLI - Zero Knowledge Proof Generation and Verification
-#[derive(Parser, Debug)]
-#[command(
-    name = "psy-validator",
-    version,
-    about = "CLI tool and HTTP server for ZK proof generation and verification",
-    long_about = None
-)]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-
-    /// Log level (e.g. info, debug, trace)
-    #[arg(long = "log-level", default_value = "info")]
-    log_level: String,
-}
-
-#[derive(Subcommand, Debug)]
-enum Commands {
-    /// Run http server
-    Server {
-        /// Listen address (e.g. 0.0.0.0)
-        #[arg(long = "listen-addr", default_value = "0.0.0.0")]
-        listen_addr: String,
-
-        /// Listening port
-        #[arg(long, default_value_t = 4000)]
-        port: u16,
-    },
-    /// Generate zero-knowledge proof
-    GenerateProof {
-        /// Input JSON file path
-        #[arg(short, long)]
-        input: PathBuf,
-
-        /// Output file path (default: stdout)
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-
-        /// Worker reward tag (hex string, optional)
-        #[arg(long)]
-        worker_reward_tag: Option<String>,
-
-        /// Reward tree value (hex string, optional)
-        #[arg(long)]
-        reward_tree_value: Option<String>,
-    },
-
-    /// Verify zero-knowledge proof
-    VerifyProof {
-        /// Input JSON file path
-        #[arg(short, long)]
-        input: PathBuf,
-
-        /// Proof file path (hex string or JSON with proof field)
-        #[arg(short, long)]
-        proof: PathBuf,
-
-        /// Worker reward tag (hex string, optional)
-        #[arg(long)]
-        worker_reward_tag: Option<String>,
-
-        /// Reward tree value (hex string, optional)
-        #[arg(long)]
-        reward_tree_value: Option<String>,
-    },
-
-    /// Fetch job and dependencies proofs in one click workflow
-    FetchJob {
-        /// Base URL (format: https://xxx)
-        #[arg(short, long)]
-        base_url: String,
-        /// Proof ID (format: job_id_hex + realm_id_hex, where job_id_hex is 48
-        /// chars and realm_id < 1000)
-        #[arg(short, long)]
-        proof_id: String,
-        /// Output directory
-        #[arg(short, long, default_value = ".")]
-        output_dir: Option<PathBuf>,
-        /// One click done
-        #[arg(short, long, default_value = "true")]
-        one_click_done: bool,
-    },
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
-
-    tracing_subscriber::fmt().with_env_filter(EnvFilter::new(&cli.log_level)).init();
-
-    match cli.command {
-        Commands::Server { listen_addr, port } => {
-            let mut config = Config::from_env();
-            config.server.host = listen_addr.clone();
-            config.server.port = port;
-
-            tracing::info!("Starting psy validator server at {}:{}", listen_addr, port);
-
-            run(config).await
-        }
-        Commands::GenerateProof {
-            input,
-            output,
-            worker_reward_tag,
-            reward_tree_value,
-        } => handle_generate_proof(input, output, worker_reward_tag, reward_tree_value),
-        Commands::VerifyProof {
-            input,
-            proof,
-            worker_reward_tag,
-            reward_tree_value,
-        } => handle_verify_proof(input, proof, worker_reward_tag, reward_tree_value),
-        Commands::FetchJob {
-            base_url,
-            proof_id,
-            output_dir,
-            one_click_done,
-        } => fetch_job(base_url, proof_id, one_click_done).await,
-    }?;
-    let app_state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
-    app_state.print_metrics();
-    Ok(())
-}
 
 /// Fetch raw_proof.json for a single dependency
 /// Returns Some(proof_hex) on success, None on failure (warning already logged)
@@ -273,7 +147,6 @@ async fn fetch_job(base_url: String, proof_id: String, one_click_done: bool) -> 
     // proof_id format: job_id_hex (48 chars) + realm_id_hex
     let (job_id, mut realm_id) = parse_proof_id(&proof_id).context("Failed to parse proof_id")?;
 
-
     // Calculate node_type based on realm_id
     let node_type = if realm_id < 999 {
         realm_id += 1;
@@ -285,7 +158,6 @@ async fn fetch_job(base_url: String, proof_id: String, one_click_done: bool) -> 
     tracing::debug!("Job ID (parsed from proof_id): {}", job_id);
     tracing::debug!("Node type (calculated): {}", node_type);
     tracing::debug!("Base URL: {}", base_url);
-
 
     let job = parse_job_id(&hex::decode(&job_id).context("Failed to decode job ID")?);
     if job.is_none() {
@@ -316,7 +188,6 @@ async fn fetch_job(base_url: String, proof_id: String, one_click_done: bool) -> 
     }
 
     let raw_input: RawInputJson = response.json().await.context("Failed to parse raw_input.json response")?;
-
 
     // Fetch raw_proof.json for each dependency in parallel
     tracing::debug!("Fetching {} dependencies in parallel", raw_input.metadata.dependencies.len());
@@ -401,7 +272,6 @@ async fn fetch_job(base_url: String, proof_id: String, one_click_done: bool) -> 
         reward_tree_value: None, // Will be computed automatically if not provided
     };
 
-
     let elapsed = start_time.elapsed();
     tracing::debug!("Job fetch completed in: {:?}", elapsed);
 
@@ -411,8 +281,7 @@ async fn fetch_job(base_url: String, proof_id: String, one_click_done: bool) -> 
 
         // Step 1: Generate proof from in-memory input_json
         tracing::debug!("Step 1/2: Generating proof...");
-        let gen_response = do_generate_proof(input_json.clone(), None, None)
-            .context("Failed to generate proof in one-click workflow")?;
+        let gen_response = do_generate_proof(input_json.clone(), None, None).context("Failed to generate proof in one-click workflow")?;
         tracing::debug!("Proof generated successfully");
 
         // Step 2: Verify proof using in-memory input and proof response
@@ -506,7 +375,8 @@ fn handle_generate_proof(
     Ok(())
 }
 
-/// Verify proof from in-memory request (request.proof and optional tags must be set). No file I/O.
+/// Verify proof from in-memory request (request.proof and optional tags must be
+/// set). No file I/O.
 fn do_verify_proof(request: &VerifyProofRequest) -> Result<VerifyProofResponse> {
     println!("Initializing circuit library...");
     let state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
@@ -709,4 +579,14 @@ pub struct RawProofJson {
     pub realm_id: u64,
     pub realm_sub_id: u64,
     pub unique_pending_id: u64,
+}
+
+pub fn parse_hex_hash(hex_str: &str) -> Result<QHashOut<GoldilocksField>, String> {
+    let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
+    if bytes.len() != 32 {
+        return Err(format!("Invalid hash length: {} (expected 32)", bytes.len()));
+    }
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&bytes);
+    Ok(QHashOut::from_owned_32bytes(arr))
 }

@@ -1,19 +1,27 @@
+use std::{
+    io::{self, BufRead, Write},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::{Duration, Instant},
+};
+
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use colored::*;
 use console::Term;
-use serde::Deserialize;
-use std::io::{self, BufRead, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
 use futures::future::join_all;
+use psy_cli::{
+    prove::{do_generate_proof, fetch_dependency_proof, parse_job_id, parse_proof_id, ParsedJobId, RawInputJson, REALM_ROOT_JOS_MAP},
+    services::APP_STATE,
+    GenerateProofRequest, PsyProvingJobMetadataWithJobIdJson, PsyWorkerGetProvingWorkAPIResponseJson,
+    PsyWorkerGetProvingWorkWithChildProofsAPIResponseJson,
+};
 use psy_core::job::job_id::ProvingJobCircuitType;
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tokio::time::sleep;
-use psy_cli::prove::{do_generate_proof, fetch_dependency_proof, parse_job_id, parse_proof_id, ParsedJobId, RawInputJson, REALM_ROOT_JOS_MAP};
-use psy_cli::{GenerateProofRequest, PsyProvingJobMetadataWithJobIdJson, PsyWorkerGetProvingWorkAPIResponseJson, PsyWorkerGetProvingWorkWithChildProofsAPIResponseJson};
-use psy_cli::services::APP_STATE;
 
 const LOGO: &str = r#"
            :*%.
@@ -63,11 +71,7 @@ fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (u8, u8, u8) {
         (c, 0.0, x)
     };
 
-    (
-        ((r1 + m) * 255.0) as u8,
-        ((g1 + m) * 255.0) as u8,
-        ((b1 + m) * 255.0) as u8,
-    )
+    (((r1 + m) * 255.0) as u8, ((g1 + m) * 255.0) as u8, ((b1 + m) * 255.0) as u8)
 }
 
 /// Check if terminal likely supports true color (24-bit)
@@ -235,21 +239,16 @@ impl Spinner {
 
 fn print_logo() {
     println!("{}", LOGO.bright_white());
-    println!(
-        " {} Psy CLI Prover: Version 0.7.1 BETA {}",
-        "===".bright_white(),
-        "===".bright_white()
-    );
-    println!(
-        " {} 𝕏: @PsyProtocol | https://psy.xyz  {}",
-        "===".bright_white(),
-        "===".bright_white()
-    );
+    println!(" {} Psy CLI Prover: Version 0.7.1 BETA {}", "===".bright_white(), "===".bright_white());
+    println!(" {} 𝕏: @PsyProtocol | https://psy.xyz  {}", "===".bright_white(), "===".bright_white());
     println!();
 }
 
 async fn initialize_circuits() -> Result<()> {
-    let spinner = Spinner::new(vec!["Initializing Circuits...".to_string(), "(one time run, this may take a few seconds)".to_string()]);
+    let spinner = Spinner::new(vec![
+        "Initializing Circuits...".to_string(),
+        "(one time run, this may take a few seconds)".to_string(),
+    ]);
 
     let _ = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
 
@@ -259,16 +258,12 @@ async fn initialize_circuits() -> Result<()> {
 
 const BASE_URL: &str = "https://psy-benchmark-round1-data.psy-protocol.xyz";
 
-async fn receive_proving_request(job_id: &str, realm_id: u32,) -> Result<RawInputJson> {
-    let spinner = Spinner::new(vec![
-        "Receiving Proving Request".to_string(),
-        format!("JobId: {}", job_id.cyan()),
-    ]);
+async fn receive_proving_request(job_id: &str, realm_id: u32) -> Result<RawInputJson> {
+    let spinner = Spinner::new(vec!["Receiving Proving Request".to_string(), format!("JobId: {}", job_id.cyan())]);
     let ret = fetch_job(BASE_URL.to_string(), realm_id, job_id.to_string()).await?;
-    spinner.finish(vec![
-        "Received Proving Request".to_string(),
-        format!("JobId: {}", job_id.cyan()),
-    ]).await;
+    spinner
+        .finish(vec!["Received Proving Request".to_string(), format!("JobId: {}", job_id.cyan())])
+        .await;
     Ok(ret)
 }
 
@@ -289,15 +284,16 @@ async fn prove_job(req: GenerateProofRequest, job_id: &str, circuit_type: &str) 
 
     let start = Instant::now();
 
-    let ret = do_generate_proof(req, None, None)
-        .context("Failed to generate proof")?;
+    let ret = do_generate_proof(req, None, None).context("Failed to generate proof")?;
 
     let elapsed = start.elapsed();
 
-    spinner.finish(vec![
-        format!("Proved JobID {}", job_id.cyan()),
-        format!("Circuit type: {}", circuit_type.green()),
-    ]).await;
+    spinner
+        .finish(vec![
+            format!("Proved JobID {}", job_id.cyan()),
+            format!("Circuit type: {}", circuit_type.green()),
+        ])
+        .await;
 
     Ok((hex::decode(&ret.proof)?, elapsed))
 }
@@ -321,10 +317,7 @@ async fn fetch_benchmark_time(job_id: &str, mut realm_id: u32) -> Result<u64> {
         .await
         .context("Failed to fetch benchmark time")?;
 
-    let benchmark: BenchmarkResponse = response
-        .json()
-        .await
-        .context("Failed to parse benchmark response")?;
+    let benchmark: BenchmarkResponse = response.json().await.context("Failed to parse benchmark response")?;
 
     spinner.finish_single("Fetched benchmark machine proving time").await;
 
@@ -332,7 +325,6 @@ async fn fetch_benchmark_time(job_id: &str, mut realm_id: u32) -> Result<u64> {
 }
 
 fn print_results(your_time_ms: u64, benchmark_time_ms: u64) {
-
     let benchmark_color = if your_time_ms > benchmark_time_ms {
         format!("{}ms", benchmark_time_ms).green().bold()
     } else if your_time_ms < benchmark_time_ms {
@@ -351,13 +343,7 @@ fn print_results(your_time_ms: u64, benchmark_time_ms: u64) {
     } else {
         format!("the same speed as the benchmark machine").white().bold()
     };
-    let comparison = 
-        format!(
-            "Your computer is {} (Benchmark machine is {}ms).",
-            delta_str,
-            benchmark_time_ms
-        );
-    
+    let comparison = format!("Your computer is {} (Benchmark machine is {}ms).", delta_str, benchmark_time_ms);
 
     println!("{}", comparison);
     println!();
@@ -378,7 +364,14 @@ async fn process_job(job_id: &str, realm_id: u32, first_run: bool) -> Result<()>
     let result_str = format!("Proved in {}ms", your_time_ms).bright_white().bold();
     let pad_left = (48 - result_str.len()) / 2;
     let pad_right = 48 - result_str.len() - pad_left;
-    println!("|{}{}{}|", " ".repeat(pad_left), format!("Proved in {}", format!("{}ms", your_time_ms).bright_green()).bright_white().bold(), " ".repeat(pad_right));
+    println!(
+        "|{}{}{}|",
+        " ".repeat(pad_left),
+        format!("Proved in {}", format!("{}ms", your_time_ms).bright_green())
+            .bright_white()
+            .bold(),
+        " ".repeat(pad_right)
+    );
     println!("--------------------------------------------------");
     let mut hasher = Sha256::new();
     hasher.update(&proof);
@@ -433,24 +426,14 @@ async fn run_batch_mode() -> Result<()> {
         let realm_id: u32 = match parts[0].trim().parse() {
             Ok(id) => id,
             Err(_) => {
-                eprintln!(
-                    "{} Invalid realm_id on line {}: '{}'",
-                    "Warning:".yellow(),
-                    i + 1,
-                    parts[0]
-                );
+                eprintln!("{} Invalid realm_id on line {}: '{}'", "Warning:".yellow(), i + 1, parts[0]);
                 continue;
             }
         };
 
         let job_id = parts[1].trim();
 
-        println!(
-            "{} Processing job {}/{}",
-            ">>>".cyan(),
-            i + 1,
-            lines.len()
-        );
+        println!("{} Processing job {}/{}", ">>>".cyan(), i + 1, lines.len());
 
         if let Err(e) = process_job(job_id, realm_id, first_run).await {
             eprintln!("{} Error processing job: {}", "Error:".red(), e);
@@ -491,8 +474,8 @@ async fn main() -> Result<()> {
 }
 
 pub fn get_proof_id(job_id: String, realm_id: u32) -> Result<String> {
-    // realm_id must occupy 2 bytes (4 hex chars), so format as 4 hex digits (zero-padded)
-    // job_id must be exactly 48 hex characters (24 bytes)
+    // realm_id must occupy 2 bytes (4 hex chars), so format as 4 hex digits
+    // (zero-padded) job_id must be exactly 48 hex characters (24 bytes)
     let job_id = job_id.trim_start_matches("0x");
     if job_id.len() != 48 {
         anyhow::bail!("job_id must be 48 hex characters (24 bytes), got {}", job_id.len());
@@ -528,7 +511,6 @@ fn get_metadata(job_id: String, realm_id: u32) -> Result<(ParsedJobId, u64, u8, 
     tracing::debug!("Realm ID (parsed from proof_id): {}", realm_id);
     tracing::debug!("Job ID (parsed from proof_id): {}", job_id);
     tracing::debug!("Node type (calculated): {}", node_type);
-
 
     let job = parse_job_id(&hex::decode(&job_id).context("Failed to decode job ID")?);
     if job.is_none() {
@@ -567,13 +549,7 @@ async fn fetch_job(base_url: String, realm_id: u32, job_id: String) -> Result<Ra
     Ok(raw_input)
 }
 
-
-async fn fetch_dependency_proofs(
-    raw_input: RawInputJson,
-    base_url: &str,
-    job_id: String,
-    realm_id: u32,
-) -> Result<GenerateProofRequest> {
+async fn fetch_dependency_proofs(raw_input: RawInputJson, base_url: &str, job_id: String, realm_id: u32) -> Result<GenerateProofRequest> {
     let (job, realm_id, node_type, job_id, proof_id) = get_metadata(job_id, realm_id)?;
     tracing::debug!("Job: {:?}", job);
     if job.circuit_type == 6 {
