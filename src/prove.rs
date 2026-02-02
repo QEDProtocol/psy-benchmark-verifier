@@ -10,6 +10,10 @@ use futures::future::join_all;
 use once_cell::sync::Lazy;
 use parth_core::{pgoldilocks::QHashOut, protocol::core_types::Q256BitHash};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use serde::{Deserialize, Serialize};
+use serde_json;
+use tracing_subscriber::{self, EnvFilter};
+
 use crate::{
     models::{
         GenerateProofRequest, GenerateProofResponse, PsyProvingJobMetadataJson, PsyProvingJobMetadataWithJobIdJson,
@@ -18,9 +22,6 @@ use crate::{
     services::{derive_worker_reward_tag_from_job_id, APP_STATE},
     AppState,
 };
-use serde::{Deserialize, Serialize};
-use serde_json;
-use tracing_subscriber::{self, EnvFilter};
 
 pub static REALM_ROOT_JOS_MAP: Lazy<HashMap<String, String>> = Lazy::new(|| {
     let content = include_str!("../realm_root_jos_map.json");
@@ -146,7 +147,6 @@ async fn fetch_job(base_url: String, proof_id: String, one_click_done: bool) -> 
     // proof_id format: job_id_hex (48 chars) + realm_id_hex
     let (job_id, mut realm_id) = parse_proof_id(&proof_id).context("Failed to parse proof_id")?;
 
-
     // Calculate node_type based on realm_id
     let node_type = if realm_id < 999 {
         realm_id += 1;
@@ -158,7 +158,6 @@ async fn fetch_job(base_url: String, proof_id: String, one_click_done: bool) -> 
     tracing::debug!("Job ID (parsed from proof_id): {}", job_id);
     tracing::debug!("Node type (calculated): {}", node_type);
     tracing::debug!("Base URL: {}", base_url);
-
 
     let job = parse_job_id(&hex::decode(&job_id).context("Failed to decode job ID")?);
     if job.is_none() {
@@ -189,7 +188,6 @@ async fn fetch_job(base_url: String, proof_id: String, one_click_done: bool) -> 
     }
 
     let raw_input: RawInputJson = response.json().await.context("Failed to parse raw_input.json response")?;
-
 
     // Fetch raw_proof.json for each dependency in parallel
     tracing::debug!("Fetching {} dependencies in parallel", raw_input.metadata.dependencies.len());
@@ -274,7 +272,6 @@ async fn fetch_job(base_url: String, proof_id: String, one_click_done: bool) -> 
         reward_tree_value: None, // Will be computed automatically if not provided
     };
 
-
     let elapsed = start_time.elapsed();
     tracing::debug!("Job fetch completed in: {:?}", elapsed);
 
@@ -284,8 +281,7 @@ async fn fetch_job(base_url: String, proof_id: String, one_click_done: bool) -> 
 
         // Step 1: Generate proof from in-memory input_json
         tracing::debug!("Step 1/2: Generating proof...");
-        let gen_response = do_generate_proof(input_json.clone(), None, None)
-            .context("Failed to generate proof in one-click workflow")?;
+        let gen_response = do_generate_proof(input_json.clone(), None, None).context("Failed to generate proof in one-click workflow")?;
         tracing::debug!("Proof generated successfully");
 
         // Step 2: Verify proof using in-memory input and proof response
@@ -379,7 +375,8 @@ fn handle_generate_proof(
     Ok(())
 }
 
-/// Verify proof from in-memory request (request.proof and optional tags must be set). No file I/O.
+/// Verify proof from in-memory request (request.proof and optional tags must be
+/// set). No file I/O.
 fn do_verify_proof(request: &VerifyProofRequest) -> Result<VerifyProofResponse> {
     println!("Initializing circuit library...");
     let state = APP_STATE.as_ref().map_err(|e| anyhow::anyhow!("Failed to initialize AppState: {}", e))?;
