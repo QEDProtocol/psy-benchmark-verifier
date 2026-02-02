@@ -379,14 +379,9 @@ async fn process_job(job_id: &str, realm_id: u32, first_run: bool) -> Result<()>
     let hash_str = hex::encode(hash_result);
     println!("Proof SHA256: {}", hash_str.bright_yellow());
 
-    let benchmark_time_ms = match fetch_benchmark_time(job_id, realm_id).await {
-        Ok(time) => time,
-        Err(e) => {
-            eprintln!("{} Failed to fetch benchmark time: {}", "⚠".yellow(), e);
-            // Use a default benchmark time if fetch fails
-            1337
-        }
-    };
+    let benchmark_time_ms = fetch_benchmark_time(job_id, realm_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to fetch benchmark time: {}", e))?;
 
     print_results(your_time_ms, benchmark_time_ms);
 
